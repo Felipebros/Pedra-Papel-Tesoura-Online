@@ -23,7 +23,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
-import { collection, query, orderBy, limit, onSnapshot, doc, deleteDoc, where } from 'firebase/firestore';
+import { collection, query, orderBy, limit, onSnapshot, doc, deleteDoc, where, getDoc } from 'firebase/firestore';
 
 const GameUI = () => {
   const { user, profile, loading } = useAuth();
@@ -31,6 +31,7 @@ const GameUI = () => {
   const [currentGame, setCurrentGame] = useState<GameSession | null>(null);
   const [selectedMove, setSelectedMove] = useState<Move | null>(null);
   const [leaderboard, setLeaderboard] = useState<UserProfile[]>([]);
+  const [searchStartTime, setSearchStartTime] = useState<number>(0);
 
   useEffect(() => {
     // Force dark mode
@@ -45,18 +46,41 @@ const GameUI = () => {
   }, []);
 
   useEffect(() => {
-    if (gameState === 'searching' && user) {
-      const q = query(collection(db, 'games'), where('players', 'array-contains', user.uid), where('status', '==', 'playing'));
+    if (gameState === 'searching' && user && searchStartTime > 0) {
+      // Simplified query to avoid index requirements
+      const q = query(
+        collection(db, 'games'), 
+        where('players', 'array-contains', user.uid), 
+        where('status', '==', 'playing')
+      );
+      
       const unsubscribe = onSnapshot(q, (snapshot) => {
         if (!snapshot.empty) {
-          const game = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as GameSession;
-          setCurrentGame(game);
-          setGameState('playing');
+          // Find the most recent game from the results
+          const games = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as GameSession));
+          
+          // Filter for games created AFTER we started searching (with a small grace period)
+          const validGames = games.filter(g => {
+            const createdAt = g.createdAt?.toMillis?.() || 0;
+            return createdAt >= searchStartTime - 2000; // 2s grace
+          });
+
+          if (validGames.length > 0) {
+            const latestGame = validGames.sort((a, b) => {
+              const timeA = a.createdAt?.toMillis?.() || 0;
+              const timeB = b.createdAt?.toMillis?.() || 0;
+              return timeB - timeA;
+            })[0];
+
+            setCurrentGame(latestGame);
+            setGameState('playing');
+            toast.success("Partida iniciada!");
+          }
         }
       });
       return () => unsubscribe();
     }
-  }, [gameState, user]);
+  }, [gameState, user, searchStartTime]);
 
   useEffect(() => {
     if (currentGame?.id) {
@@ -80,11 +104,25 @@ const GameUI = () => {
 
   const handleStartSearch = async () => {
     if (!profile) return;
+    
+    // Reset states
+    setCurrentGame(null);
+    setSelectedMove(null);
+    const now = Date.now();
+    setSearchStartTime(now);
     setGameState('searching');
+    
     try {
       const gameId = await findMatch(profile);
       if (gameId) {
-        toast.success("Oponente encontrado!");
+        // If we found a match, fetch it immediately
+        const gameDoc = await getDoc(doc(db, 'games', gameId));
+        if (gameDoc.exists()) {
+          const gameData = { id: gameDoc.id, ...gameDoc.data() } as GameSession;
+          setCurrentGame(gameData);
+          setGameState('playing');
+          toast.success("Oponente encontrado!");
+        }
       } else {
         toast.info("Procurando oponente...");
       }
@@ -92,6 +130,7 @@ const GameUI = () => {
       console.error(error);
       toast.error("Erro ao procurar partida.");
       setGameState('idle');
+      setSearchStartTime(0);
     }
   };
 
@@ -211,10 +250,13 @@ const GameUI = () => {
     <div className="min-h-screen bg-zinc-950 text-white font-sans selection:bg-orange-500/30">
       <header className="border-b border-zinc-800 p-4 backdrop-blur-md sticky top-0 z-50 bg-zinc-950/80">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Swords className="text-orange-500 h-6 w-6" />
+          <button 
+            onClick={resetGame}
+            className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer group"
+          >
+            <Swords className="text-orange-500 h-6 w-6 group-hover:rotate-12 transition-transform" />
             <span className="font-black italic tracking-tighter text-xl uppercase">PPT ONLINE</span>
-          </div>
+          </button>
           
           <div className="flex items-center gap-4">
             <div className="hidden sm:flex items-center gap-3 pr-4 border-r border-zinc-800">
@@ -471,7 +513,7 @@ const GameUI = () => {
                       onClick={handleRematch}
                       disabled={currentGame.rematchRequests?.includes(user.uid)}
                       size="lg"
-                      className="w-full bg-orange-500 text-black hover:bg-orange-600 font-black uppercase italic tracking-tighter h-16 sm:h-14 rounded-full text-lg sm:text-base"
+                      className="w-full bg-orange-500 text-black hover:bg-orange-600 font-black uppercase italic tracking-tighter h-20 sm:h-16 rounded-full text-xl sm:text-lg shadow-xl shadow-orange-500/10"
                     >
                       {currentGame.rematchRequests?.includes(user.uid) ? 'AGUARDANDO...' : 'REVANCHE'}
                     </Button>
@@ -480,7 +522,7 @@ const GameUI = () => {
                       onClick={handleNewOpponent}
                       size="lg"
                       variant="outline"
-                      className="w-full border-zinc-800 text-white hover:bg-zinc-900 font-black uppercase italic tracking-tighter h-16 sm:h-14 rounded-full text-lg sm:text-base"
+                      className="w-full border-zinc-800 text-white hover:bg-zinc-900 font-black uppercase italic tracking-tighter h-20 sm:h-16 rounded-full text-xl sm:text-lg"
                     >
                       NOVO OPONENTE
                     </Button>
@@ -488,7 +530,7 @@ const GameUI = () => {
                     <Button 
                       onClick={resetGame}
                       variant="ghost"
-                      className="w-full text-zinc-500 hover:text-white uppercase font-black italic tracking-tighter h-12 text-sm"
+                      className="w-full text-zinc-500 hover:text-white uppercase font-black italic tracking-tighter h-14 text-base"
                     >
                       VOLTAR AO MENU
                     </Button>
