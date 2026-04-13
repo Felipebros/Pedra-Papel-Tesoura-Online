@@ -10,7 +10,8 @@ import {
   runTransaction,
   increment,
   setDoc,
-  limit
+  limit,
+  updateDoc
 } from 'firebase/firestore';
 import { db, Move, GameSession } from './firebase';
 
@@ -134,5 +135,13 @@ export const requestRematch = async (gameId: string, userId: string) => {
         updatedAt: serverTimestamp()
       });
     }
+  });
+};
+
+export const abandonGame = async (gameId: string) => {
+  const gameRef = doc(db, 'games', gameId);
+  await updateDoc(gameRef, {
+    status: 'abandoned',
+    updatedAt: serverTimestamp()
   });
 };

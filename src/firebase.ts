@@ -59,7 +59,7 @@ export const logout = () => signOut(auth);
 
 // Types
 export type Move = 'rock' | 'paper' | 'scissors';
-export type GameStatus = 'waiting' | 'playing' | 'finished';
+export type GameStatus = 'waiting' | 'playing' | 'finished' | 'abandoned';
 
 export interface UserStats {
   wins: number;

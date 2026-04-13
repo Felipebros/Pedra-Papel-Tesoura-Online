@@ -9,11 +9,13 @@ import {
   RotateCcw, 
   Medal,
   Swords,
-  Loader2
+  Loader2,
+  History,
+  X
 } from 'lucide-react';
 import { useAuth, AuthProvider } from './AuthContext';
 import { loginWithGoogle, logout, Move, GameSession, UserProfile, db } from './firebase';
-import { findMatch, submitMove, requestRematch } from './gameService';
+import { findMatch, submitMove, requestRematch, abandonGame } from './gameService';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
@@ -32,6 +34,8 @@ const GameUI = () => {
   const [selectedMove, setSelectedMove] = useState<Move | null>(null);
   const [leaderboard, setLeaderboard] = useState<UserProfile[]>([]);
   const [searchStartTime, setSearchStartTime] = useState<number>(0);
+  const [showHistory, setShowHistory] = useState(false);
+  const [matchHistory, setMatchHistory] = useState<GameSession[]>([]);
 
   useEffect(() => {
     // Force dark mode
@@ -44,6 +48,22 @@ const GameUI = () => {
     });
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (user && showHistory) {
+      const q = query(
+        collection(db, 'games'),
+        where('players', 'array-contains', user.uid),
+        where('status', '==', 'finished')
+      );
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const games = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GameSession));
+        // Sort client-side to avoid index requirement
+        setMatchHistory(games.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0)));
+      });
+      return () => unsubscribe();
+    }
+  }, [user, showHistory]);
 
   useEffect(() => {
     if (gameState === 'searching' && user && searchStartTime > 0) {
@@ -95,11 +115,25 @@ const GameUI = () => {
             setGameState('playing');
             setSelectedMove(null);
             toast.success("Revanche iniciada!");
+          } else if (game.status === 'abandoned') {
+            toast.error("O oponente saiu da partida.");
+            resetGame();
           }
         }
       });
       return () => unsubscribe();
     }
+  }, [currentGame?.id, gameState]);
+
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (currentGame?.id && (gameState === 'playing' || gameState === 'searching')) {
+        // We can't await here, but we can try to send the update
+        abandonGame(currentGame.id);
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [currentGame?.id, gameState]);
 
   const handleStartSearch = async () => {
@@ -137,7 +171,7 @@ const GameUI = () => {
   const handleCancelSearch = async () => {
     if (!user) return;
     await deleteDoc(doc(db, 'matchmaking', user.uid));
-    setGameState('idle');
+    resetGame();
   };
 
   const handleMove = async (move: Move) => {
@@ -152,6 +186,9 @@ const GameUI = () => {
   };
 
   const resetGame = () => {
+    if (currentGame?.id && (gameState === 'playing' || gameState === 'searching')) {
+      abandonGame(currentGame.id).catch(console.error);
+    }
     setGameState('idle');
     setCurrentGame(null);
     setSelectedMove(null);
@@ -272,6 +309,9 @@ const GameUI = () => {
                 <AvatarFallback><UserIcon /></AvatarFallback>
               </Avatar>
             </div>
+            <Button variant="ghost" size="icon" onClick={() => setShowHistory(true)} className="text-zinc-400 hover:text-white hover:bg-zinc-900">
+              <History className="h-5 w-5" />
+            </Button>
             <Button variant="ghost" size="icon" onClick={logout} className="text-zinc-400 hover:text-white hover:bg-zinc-900">
               <LogOut className="h-5 w-5" />
             </Button>
@@ -542,6 +582,101 @@ const GameUI = () => {
         </AnimatePresence>
       </main>
       <Toaster position="bottom-center" theme="dark" />
+
+      {/* Match History Overlay */}
+      <AnimatePresence>
+        {showHistory && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-zinc-900 border border-zinc-800 w-full max-w-2xl rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[80vh]"
+            >
+              <div className="p-6 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/50">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-orange-500/10 rounded-xl">
+                    <History className="text-orange-500 h-6 w-6" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-black italic uppercase tracking-tighter">Histórico de Partidas</h2>
+                    <p className="text-xs text-zinc-500 font-bold uppercase tracking-widest">Suas últimas batalhas</p>
+                  </div>
+                </div>
+                <Button variant="ghost" size="icon" onClick={() => setShowHistory(false)} className="rounded-full hover:bg-zinc-800">
+                  <X className="h-6 w-6" />
+                </Button>
+              </div>
+
+              <ScrollArea className="flex-1 p-6">
+                <div className="space-y-4">
+                  {matchHistory.length === 0 ? (
+                    <div className="text-center py-12 space-y-4">
+                      <div className="bg-zinc-800/50 w-16 h-16 rounded-full flex items-center justify-center mx-auto">
+                        <Swords className="text-zinc-600 h-8 w-8" />
+                      </div>
+                      <p className="text-zinc-500 font-medium italic">Nenhuma partida encontrada ainda...</p>
+                    </div>
+                  ) : (
+                    matchHistory.map((game) => {
+                      const opponentId = game.players.find(id => id !== user?.uid);
+                      const opponent = game.playerData[opponentId!];
+                      const isWinner = game.winner === user?.uid;
+                      const isDraw = game.winner === 'draw';
+                      const myMove = game.moves[user?.uid || ''];
+                      const opponentMove = game.moves[opponentId!];
+
+                      return (
+                        <div key={game.id} className="bg-zinc-950/50 border border-zinc-800/50 rounded-2xl p-4 flex items-center justify-between group hover:border-orange-500/30 transition-colors">
+                          <div className="flex items-center gap-4">
+                            <div className={`w-2 h-12 rounded-full ${isWinner ? 'bg-green-500' : isDraw ? 'bg-zinc-500' : 'bg-red-500'}`} />
+                            <div className="flex items-center gap-3">
+                              <Avatar className="h-10 w-10 border border-zinc-800">
+                                <AvatarImage src={opponent?.photoURL} />
+                                <AvatarFallback className="bg-zinc-800 text-zinc-100">{opponent?.displayName[0]}</AvatarFallback>
+                              </Avatar>
+                              <div>
+                                <p className="text-sm font-bold text-zinc-100">{opponent?.displayName}</p>
+                                <p className={`text-[10px] font-black uppercase tracking-tighter ${isWinner ? 'text-green-500' : isDraw ? 'text-zinc-400' : 'text-red-500'}`}>
+                                  {isWinner ? 'Vitória' : isDraw ? 'Empate' : 'Derrota'}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-6">
+                            <div className="flex items-center gap-3 bg-zinc-900 px-3 py-2 rounded-xl border border-zinc-800">
+                              <span className="text-xl">{myMove === 'rock' ? '✊' : myMove === 'paper' ? '✋' : '✌️'}</span>
+                              <span className="text-xs font-black text-zinc-700 italic">VS</span>
+                              <span className="text-xl grayscale opacity-50">{opponentMove === 'rock' ? '✊' : opponentMove === 'paper' ? '✋' : '✌️'}</span>
+                            </div>
+                            <div className="text-right hidden sm:block">
+                              <p className="text-[10px] font-mono text-zinc-600">
+                                {game.createdAt?.toDate ? new Date(game.createdAt.toDate()).toLocaleDateString() : 'Recent'}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </ScrollArea>
+              
+              <div className="p-4 border-t border-zinc-800 bg-zinc-900/30">
+                <Button onClick={() => setShowHistory(false)} className="w-full bg-zinc-100 text-black hover:bg-white font-black uppercase italic tracking-tighter h-12 rounded-2xl">
+                  FECHAR
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
