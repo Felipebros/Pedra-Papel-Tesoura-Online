@@ -1,0 +1,6 @@
+{
+  "name": "Pedra Papel Tesoura Online",
+  "description": "Um jogo multiplayer online de Pedra, Papel ou Tesoura com ranking e perfis de usuário.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

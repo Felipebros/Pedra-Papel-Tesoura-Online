@@ -1,0 +1,35 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // User profiles
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isOwner(userId);
+      // Allow updates for stats (handled by transaction/increment)
+      // In a real app, we'd restrict this more, but for a prototype:
+      allow update: if isAuthenticated(); 
+    }
+
+    // Game sessions
+    match /games/{gameId} {
+      allow read: if isAuthenticated() && (request.auth.uid in resource.data.players);
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && (request.auth.uid in resource.data.players);
+    }
+
+    // Matchmaking queue
+    match /matchmaking/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId);
+    }
+  }
+}

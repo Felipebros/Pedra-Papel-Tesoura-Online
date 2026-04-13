@@ -1,0 +1,77 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile and game statistics",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "stats": {
+          "type": "object",
+          "properties": {
+            "wins": { "type": "number" },
+            "losses": { "type": "number" },
+            "draws": { "type": "number" }
+          }
+        },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName"]
+    },
+    "Game": {
+      "title": "Game",
+      "description": "A single match of Rock Paper Scissors",
+      "type": "object",
+      "properties": {
+        "players": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "playerData": {
+          "type": "object",
+          "description": "Map of player UID to their display name and photo"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["waiting", "playing", "finished"]
+        },
+        "moves": {
+          "type": "object",
+          "description": "Map of player UID to their move (rock, paper, scissors)"
+        },
+        "winner": { "type": "string", "description": "UID of the winner or 'draw'" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["players", "status", "createdAt"]
+    },
+    "Matchmaking": {
+      "title": "Matchmaking",
+      "description": "Queue for players looking for a game",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile data"
+    },
+    "/games/{gameId}": {
+      "schema": "Game",
+      "description": "Game session data"
+    },
+    "/matchmaking/{userId}": {
+      "schema": "Matchmaking",
+      "description": "Matchmaking queue"
+    }
+  }
+}
