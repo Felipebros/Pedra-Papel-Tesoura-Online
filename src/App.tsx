@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { useAuth, AuthProvider } from './AuthContext';
 import { loginWithGoogle, logout, Move, GameSession, UserProfile, db } from './firebase';
-import { findMatch, submitMove, requestRematch, abandonGame } from './gameService';
+import { findMatch, submitMove, requestRematch, abandonGame, resetRound } from './gameService';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
@@ -36,6 +36,9 @@ const GameUI = () => {
   const [searchStartTime, setSearchStartTime] = useState<number>(0);
   const [showHistory, setShowHistory] = useState(false);
   const [matchHistory, setMatchHistory] = useState<GameSession[]>([]);
+  const [headToHead, setHeadToHead] = useState({ wins: 0, losses: 0, draws: 0 });
+  const [lastMoves, setLastMoves] = useState<Record<string, Move>>({});
+  const [lastWinner, setLastWinner] = useState<string | 'draw' | null>(null);
 
   useEffect(() => {
     // Force dark mode
@@ -64,6 +67,32 @@ const GameUI = () => {
       return () => unsubscribe();
     }
   }, [user, showHistory]);
+
+  useEffect(() => {
+    if (user && currentGame) {
+      const opponentId = currentGame.players.find(id => id !== user.uid);
+      if (opponentId) {
+        const q = query(
+          collection(db, 'games'),
+          where('players', 'array-contains', user.uid),
+          where('status', '==', 'finished')
+        );
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+          let wins = 0, losses = 0, draws = 0;
+          snapshot.docs.forEach(doc => {
+            const data = doc.data() as GameSession;
+            if (data.players.includes(opponentId)) {
+              if (data.winner === user.uid) wins++;
+              else if (data.winner === 'draw') draws++;
+              else if (data.winner === opponentId) losses++;
+            }
+          });
+          setHeadToHead({ wins, losses, draws });
+        });
+        return () => unsubscribe();
+      }
+    }
+  }, [user, currentGame?.id]);
 
   useEffect(() => {
     if (gameState === 'searching' && user && searchStartTime > 0) {
@@ -108,14 +137,18 @@ const GameUI = () => {
         if (doc.exists()) {
           const game = { id: doc.id, ...doc.data() } as GameSession;
           setCurrentGame(game);
-          if (game.status === 'finished' && gameState !== 'result') {
-            setGameState('result');
-          } else if (game.status === 'playing' && gameState === 'result') {
-            // Rematch started
-            setGameState('playing');
+          
+          // Reset local move state when a new round starts (status is playing and our move is gone)
+          if (game.status === 'playing' && !game.moves[user.uid]) {
             setSelectedMove(null);
-            toast.success("Revanche iniciada!");
-          } else if (game.status === 'abandoned') {
+          }
+
+          if (game.status === 'finished') {
+            setLastMoves(game.moves);
+            setLastWinner(game.winner);
+          }
+
+          if (game.status === 'abandoned') {
             toast.error("O oponente saiu da partida.");
             resetGame();
           }
@@ -123,7 +156,16 @@ const GameUI = () => {
       });
       return () => unsubscribe();
     }
-  }, [currentGame?.id, gameState]);
+  }, [currentGame?.id, user?.uid]);
+
+  useEffect(() => {
+    if (currentGame?.status === 'finished') {
+      const timer = setTimeout(() => {
+        resetRound(currentGame.id).catch(console.error);
+      }, 3000); // 3 seconds is a good middle ground
+      return () => clearTimeout(timer);
+    }
+  }, [currentGame?.status, currentGame?.id]);
 
   useEffect(() => {
     const handleBeforeUnload = () => {
@@ -426,7 +468,7 @@ const GameUI = () => {
             </motion.div>
           )}
 
-          {(gameState === 'playing' || gameState === 'result') && currentGame && (
+          {(gameState === 'playing') && currentGame && (
             <motion.div 
               key="game"
               initial={{ opacity: 0 }}
@@ -474,109 +516,145 @@ const GameUI = () => {
                 </div>
               </div>
 
-              {gameState === 'playing' && (
-                <div className="flex flex-col items-center gap-8 py-10">
-                  <h3 className="text-2xl font-black italic uppercase tracking-tighter text-center">
-                    {selectedMove ? "Aguardando oponente..." : "Escolha sua jogada"}
-                  </h3>
-                  
-                  <div className="flex gap-4 sm:gap-8">
-                    {(['rock', 'paper', 'scissors'] as Move[]).map((move) => (
-                      <motion.button
-                        key={move}
-                        whileHover={!selectedMove ? { scale: 1.1, y: -5 } : {}}
-                        whileTap={!selectedMove ? { scale: 0.95 } : {}}
-                        onClick={() => handleMove(move)}
-                        disabled={!!selectedMove}
-                        className={`
-                          group relative flex flex-col items-center gap-4 p-6 rounded-3xl border-2 transition-all duration-300
-                          ${selectedMove === move 
-                            ? 'bg-orange-500 border-orange-400 text-black shadow-2xl shadow-orange-500/20' 
-                            : selectedMove 
-                              ? 'bg-zinc-900 border-zinc-800 opacity-40 grayscale' 
-                              : 'bg-zinc-900 border-zinc-800 hover:border-orange-500/50 hover:bg-zinc-800'
-                          }
-                        `}
+              <div className="flex flex-col items-center gap-6 py-4">
+                <div className="h-12 flex items-center justify-center">
+                  <AnimatePresence mode="wait">
+                    {currentGame.status === 'finished' ? (
+                      <motion.div
+                        key="result-text"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        className="text-center"
                       >
-                        <div className="text-4xl sm:text-6xl">
-                          {move === 'rock' && '✊'}
-                          {move === 'paper' && '✋'}
-                          {move === 'scissors' && '✌️'}
-                        </div>
-                        <span className="font-black uppercase italic tracking-tighter text-sm">{
-                          move === 'rock' ? 'Pedra' : move === 'paper' ? 'Papel' : 'Tesoura'
-                        }</span>
-                      </motion.button>
-                    ))}
-                  </div>
+                        <h3 className={`text-4xl font-black italic uppercase tracking-tighter ${
+                          currentGame.winner === user.uid ? 'text-green-500' : 
+                          currentGame.winner === 'draw' ? 'text-zinc-400' : 'text-red-500'
+                        }`}>
+                          {currentGame.winner === user.uid ? 'VOCÊ VENCEU!' : 
+                           currentGame.winner === 'draw' ? 'EMPATE!' : 'VOCÊ PERDEU!'}
+                        </h3>
+                      </motion.div>
+                    ) : (
+                      <motion.h3 
+                        key="status-text"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="text-2xl font-black italic uppercase tracking-tighter text-center text-zinc-400"
+                      >
+                        {selectedMove ? "Aguardando oponente..." : "Escolha sua jogada"}
+                      </motion.h3>
+                    )}
+                  </AnimatePresence>
                 </div>
-              )}
+                
+                <div className="flex gap-4 sm:gap-8">
+                  {(['rock', 'paper', 'scissors'] as Move[]).map((move) => (
+                    <motion.button
+                      key={move}
+                      whileHover={!selectedMove && currentGame.status === 'playing' ? { scale: 1.1, y: -5 } : {}}
+                      whileTap={!selectedMove && currentGame.status === 'playing' ? { scale: 0.95 } : {}}
+                      onClick={() => handleMove(move)}
+                      disabled={!!selectedMove || currentGame.status === 'finished'}
+                      className={`
+                        group relative flex flex-col items-center gap-4 p-6 rounded-3xl border-2 transition-all duration-300
+                        ${(selectedMove === move || (currentGame.status === 'finished' && currentGame.moves[user.uid] === move))
+                          ? 'bg-orange-500 border-orange-400 text-black shadow-2xl shadow-orange-500/20' 
+                          : (selectedMove || currentGame.status === 'finished')
+                            ? 'bg-zinc-900 border-zinc-800 opacity-40 grayscale' 
+                            : 'bg-zinc-900 border-zinc-800 hover:border-orange-500/50 hover:bg-zinc-800'
+                        }
+                      `}
+                    >
+                      <div className="text-4xl sm:text-6xl">
+                        {move === 'rock' && '✊'}
+                        {move === 'paper' && '✋'}
+                        {move === 'scissors' && '✌️'}
+                      </div>
+                      <span className="font-black uppercase italic tracking-tighter text-sm">{
+                        move === 'rock' ? 'Pedra' : move === 'paper' ? 'Papel' : 'Tesoura'
+                      }</span>
+                    </motion.button>
+                  ))}
+                </div>
+              </div>
 
-              {gameState === 'result' && (
-                <motion.div 
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="flex flex-col items-center gap-8 py-10"
-                >
-                  <div className="text-center space-y-4">
-                    <h3 className={`text-6xl sm:text-8xl font-black italic uppercase tracking-tighter ${
-                      currentGame.winner === user.uid ? 'text-green-500' : 
-                      currentGame.winner === 'draw' ? 'text-zinc-400' : 'text-red-500'
-                    }`}>
-                      {currentGame.winner === user.uid ? 'VITÓRIA!' : 
-                       currentGame.winner === 'draw' ? 'EMPATE' : 'DERROTA'}
-                    </h3>
-                    
-                    <div className="flex items-center justify-center gap-12 pt-4">
-                      <div className="flex flex-col items-center gap-2">
-                        <span className="text-4xl grayscale opacity-50">
-                          {currentGame.moves[currentGame.players.find(id => id !== user.uid)!] === 'rock' && '✊'}
-                          {currentGame.moves[currentGame.players.find(id => id !== user.uid)!] === 'paper' && '✋'}
-                          {currentGame.moves[currentGame.players.find(id => id !== user.uid)!] === 'scissors' && '✌️'}
-                        </span>
-                        <span className="text-[10px] font-black uppercase text-zinc-500">Oponente</span>
-                      </div>
-                      <div className="text-2xl font-black text-zinc-800">VS</div>
-                      <div className="flex flex-col items-center gap-2">
-                        <span className="text-4xl">
-                          {currentGame.moves[user.uid] === 'rock' && '✊'}
-                          {currentGame.moves[user.uid] === 'paper' && '✋'}
-                          {currentGame.moves[user.uid] === 'scissors' && '✌️'}
-                        </span>
-                        <span className="text-[10px] font-black uppercase text-orange-500">Você</span>
-                      </div>
+              <div className="space-y-6 pt-6 border-t border-zinc-900">
+                {/* Last Moves Drawings */}
+                {Object.keys(lastMoves).length > 0 && (
+                  <div className="flex justify-center gap-12 items-center">
+                    <div className="flex flex-col items-center gap-1">
+                      <span className={`text-4xl transition-all duration-500 ${
+                        lastWinner === currentGame.players.find(id => id !== user.uid) || lastWinner === 'draw' 
+                        ? 'opacity-100 scale-110' 
+                        : 'grayscale opacity-20 scale-90'
+                      }`}>
+                        {lastMoves[currentGame.players.find(id => id !== user.uid)!] === 'rock' && '✊'}
+                        {lastMoves[currentGame.players.find(id => id !== user.uid)!] === 'paper' && '✋'}
+                        {lastMoves[currentGame.players.find(id => id !== user.uid)!] === 'scissors' && '✌️'}
+                      </span>
+                    </div>
+                    <div className="text-[10px] font-black text-zinc-800 italic">VS</div>
+                    <div className="flex flex-col items-center gap-1">
+                      <span className={`text-4xl transition-all duration-500 ${
+                        lastWinner === user.uid || lastWinner === 'draw' 
+                        ? 'opacity-100 scale-110' 
+                        : 'grayscale opacity-20 scale-90'
+                      }`}>
+                        {lastMoves[user.uid] === 'rock' && '✊'}
+                        {lastMoves[user.uid] === 'paper' && '✋'}
+                        {lastMoves[user.uid] === 'scissors' && '✌️'}
+                      </span>
                     </div>
                   </div>
+                )}
 
-                  <div className="flex flex-col gap-4 w-full max-w-md px-4 sm:px-0">
-                    <Button 
-                      onClick={handleRematch}
-                      disabled={currentGame.rematchRequests?.includes(user.uid)}
-                      size="lg"
-                      className="w-full bg-orange-500 text-black hover:bg-orange-600 font-black uppercase italic tracking-tighter h-20 sm:h-16 rounded-full text-xl sm:text-lg shadow-xl shadow-orange-500/10"
-                    >
-                      {currentGame.rematchRequests?.includes(user.uid) ? 'AGUARDANDO...' : 'REVANCHE'}
-                    </Button>
-                    
-                    <Button 
-                      onClick={handleNewOpponent}
-                      size="lg"
-                      variant="outline"
-                      className="w-full border-zinc-800 text-white hover:bg-zinc-900 font-black uppercase italic tracking-tighter h-20 sm:h-16 rounded-full text-xl sm:text-lg"
-                    >
-                      NOVO OPONENTE
-                    </Button>
-
-                    <Button 
-                      onClick={resetGame}
-                      variant="ghost"
-                      className="w-full text-zinc-500 hover:text-white uppercase font-black italic tracking-tighter h-14 text-base"
-                    >
-                      VOLTAR AO MENU
-                    </Button>
+                <div className="text-center space-y-2">
+                  <p className="text-xs font-black text-zinc-500 uppercase tracking-widest">Placar da Partida Atual</p>
+                  <div className="flex justify-center gap-12">
+                    <div className="text-center">
+                      <p className="text-3xl font-black text-orange-500">
+                        {currentGame.sessionScore?.[currentGame.players.find(id => id !== user.uid)!] || 0}
+                      </p>
+                      <p className="text-[10px] font-bold text-zinc-600 uppercase">Oponente</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-3xl font-black text-orange-500">
+                        {currentGame.sessionScore?.[user.uid] || 0}
+                      </p>
+                      <p className="text-[10px] font-bold text-zinc-600 uppercase">Você</p>
+                    </div>
                   </div>
-                </motion.div>
-              )}
+                </div>
+
+                <div className="text-center space-y-2">
+                  <p className="text-xs font-black text-zinc-500 uppercase tracking-widest">Histórico Geral entre vocês</p>
+                  <div className="flex justify-center gap-8">
+                    <div className="text-center">
+                      <p className="text-2xl font-black text-green-500">{headToHead.wins}</p>
+                      <p className="text-[10px] font-bold text-zinc-600 uppercase">Vitórias</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-2xl font-black text-zinc-400">{headToHead.draws}</p>
+                      <p className="text-[10px] font-bold text-zinc-600 uppercase">Empates</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-2xl font-black text-red-500">{headToHead.losses}</p>
+                      <p className="text-[10px] font-bold text-zinc-600 uppercase">Derrotas</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-center">
+                  <Button 
+                    onClick={resetGame}
+                    variant="outline"
+                    className="border-zinc-800 text-zinc-500 hover:text-white hover:bg-zinc-900 font-black uppercase italic tracking-tighter h-12 px-8 rounded-full"
+                  >
+                    SAIR DA PARTIDA
+                  </Button>
+                </div>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>

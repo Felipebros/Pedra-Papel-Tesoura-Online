@@ -25,8 +25,8 @@ Object.entries(rawConfig).forEach(([key, value]) => {
 // Diagnostic log (masked for security)
 if (firebaseOptions.apiKey) {
   const key = firebaseOptions.apiKey;
-  console.log(`[Firebase Debug] API Key loaded: ${key.substring(0, 6)}...${key.substring(key.length - 4)} (Length: ${key.length})`);
-  console.log(`[Firebase Debug] Project ID: ${firebaseOptions.projectId}`);
+  // console.log(`[Firebase Debug] API Key loaded: ${key.substring(0, 6)}...${key.substring(key.length - 4)} (Length: ${key.length})`);
+  // console.log(`[Firebase Debug] Project ID: ${firebaseOptions.projectId}`);
 } else {
   console.error("[Firebase Debug] API Key NOT found in environment variables!");
 }
@@ -40,7 +40,7 @@ async function testConnection() {
   try {
     // Try to fetch a non-existent doc just to test connectivity
     await getDocFromServer(doc(db, '_internal_', 'connection-test'));
-    console.log("[Firebase Debug] Firestore connection successful.");
+    // console.log("[Firebase Debug] Firestore connection successful.");
   } catch (error: any) {
     if (error.message?.includes('the client is offline')) {
       console.error("[Firebase Debug] Firestore connection failed: Client is offline. Check your configuration.");
@@ -82,6 +82,7 @@ export interface GameSession {
   status: GameStatus;
   moves: Record<string, Move>;
   winner: string | 'draw' | null;
+  sessionScore?: Record<string, number>;
   rematchRequests?: string[];
   createdAt: any;
   updatedAt: any;

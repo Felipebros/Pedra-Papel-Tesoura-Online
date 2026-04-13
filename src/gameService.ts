@@ -33,6 +33,10 @@ export const findMatch = async (user: { uid: string, displayName: string, photoU
       status: 'playing',
       moves: {},
       winner: null,
+      sessionScore: {
+        [user.uid]: 0,
+        [opponent.uid]: 0
+      },
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     };
@@ -79,16 +83,12 @@ export const submitMove = async (gameId: string, userId: string, move: Move) => 
         }
       }
       
-      transaction.update(gameRef, {
-        moves: newMoves,
-        status: 'finished',
-        winner,
-        updatedAt: serverTimestamp()
-      });
-      
       const user1Ref = doc(db, 'users', playerIds[0]);
       const user2Ref = doc(db, 'users', playerIds[1]);
       
+      const sessionScore = data.sessionScore || { [playerIds[0]]: 0, [playerIds[1]]: 0 };
+      const newSessionScore = { ...sessionScore };
+
       if (winner === 'draw') {
         transaction.update(user1Ref, { 'stats.draws': increment(1) });
         transaction.update(user2Ref, { 'stats.draws': increment(1) });
@@ -96,7 +96,16 @@ export const submitMove = async (gameId: string, userId: string, move: Move) => 
         const loserId = playerIds.find(id => id !== winner)!;
         transaction.update(doc(db, 'users', winner), { 'stats.wins': increment(1) });
         transaction.update(doc(db, 'users', loserId), { 'stats.losses': increment(1) });
+        newSessionScore[winner] = (newSessionScore[winner] || 0) + 1;
       }
+
+      transaction.update(gameRef, {
+        moves: newMoves,
+        status: 'finished',
+        winner,
+        sessionScore: newSessionScore,
+        updatedAt: serverTimestamp()
+      });
     } else {
       transaction.update(gameRef, {
         moves: newMoves,
@@ -135,6 +144,16 @@ export const requestRematch = async (gameId: string, userId: string) => {
         updatedAt: serverTimestamp()
       });
     }
+  });
+};
+
+export const resetRound = async (gameId: string) => {
+  const gameRef = doc(db, 'games', gameId);
+  await updateDoc(gameRef, {
+    status: 'playing',
+    moves: {},
+    winner: null,
+    updatedAt: serverTimestamp()
   });
 };
 
