@@ -75,6 +75,17 @@ export interface UserProfile {
   isOnline?: boolean;
   status?: 'online' | 'away' | 'offline';
   lastSeen?: any;
+  friends?: string[]; // Array of friend UIDs
+  createdAt: any;
+}
+
+export interface FriendRequest {
+  id: string;
+  from: string;
+  fromName: string;
+  fromPhoto: string;
+  to: string;
+  status: 'pending' | 'accepted' | 'declined';
   createdAt: any;
 }
 

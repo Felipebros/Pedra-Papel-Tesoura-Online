@@ -14,11 +14,15 @@ import {
   X,
   UserPlus,
   Check,
-  XCircle
+  XCircle,
+  Users,
+  UserMinus,
+  UserCheck,
+  Clock
 } from 'lucide-react';
 import { useAuth, AuthProvider } from './AuthContext';
 import { loginWithGoogle, logout, Move, GameSession, UserProfile, db } from './firebase';
-import { findMatch, submitMove, requestRematch, abandonGame, resetRound, sendInvite, acceptInvite, declineInvite } from './gameService';
+import { findMatch, submitMove, requestRematch, abandonGame, resetRound, sendInvite, acceptInvite, declineInvite, sendFriendRequest, acceptFriendRequest, removeFriend } from './gameService';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
@@ -28,7 +32,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
-import { collection, query, orderBy, limit, onSnapshot, doc, deleteDoc, where, getDoc } from 'firebase/firestore';
+import { collection, query, orderBy, limit, onSnapshot, doc, deleteDoc, where, getDoc, updateDoc } from 'firebase/firestore';
 
 const GameUI = () => {
   const { user, profile, loading } = useAuth();
@@ -45,6 +49,9 @@ const GameUI = () => {
   const [selectedProfile, setSelectedProfile] = useState<UserProfile | null>(null);
   const [incomingInvite, setIncomingInvite] = useState<any>(null);
   const [opponentProfile, setOpponentProfile] = useState<UserProfile | null>(null);
+  const [friendRequests, setFriendRequests] = useState<any[]>([]);
+  const [friendsList, setFriendsList] = useState<UserProfile[]>([]);
+  const [showFriends, setShowFriends] = useState(false);
 
   useEffect(() => {
     // Force dark mode
@@ -221,6 +228,38 @@ const GameUI = () => {
   }, [user]);
 
   useEffect(() => {
+    if (user) {
+      // Listen for friend requests
+      const qRequests = query(
+        collection(db, 'friend_requests'),
+        where('to', '==', user.uid),
+        where('status', '==', 'pending')
+      );
+      const unsubscribeRequests = onSnapshot(qRequests, (snapshot) => {
+        setFriendRequests(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+      });
+
+      // Listen for friends profiles
+      if (profile?.friends && profile.friends.length > 0) {
+        const qFriends = query(
+          collection(db, 'users'),
+          where('uid', 'in', profile.friends)
+        );
+        const unsubscribeFriends = onSnapshot(qFriends, (snapshot) => {
+          setFriendsList(snapshot.docs.map(d => d.data() as UserProfile));
+        });
+        return () => {
+          unsubscribeRequests();
+          unsubscribeFriends();
+        };
+      } else {
+        setFriendsList([]);
+        return () => unsubscribeRequests();
+      }
+    }
+  }, [user, profile?.friends]);
+
+  useEffect(() => {
     if (currentGame?.status === 'finished') {
       const timer = setTimeout(() => {
         resetRound(currentGame.id).catch(console.error);
@@ -364,6 +403,38 @@ const GameUI = () => {
     }
   };
 
+  const handleSendFriendRequest = async (toUid: string) => {
+    if (!profile) return;
+    try {
+      await sendFriendRequest(profile, toUid);
+      toast.success("Pedido de amizade enviado!");
+    } catch (error) {
+      console.error(error);
+      toast.error("Erro ao enviar pedido de amizade.");
+    }
+  };
+
+  const handleAcceptFriendRequest = async (requestId: string) => {
+    try {
+      await acceptFriendRequest(requestId);
+      toast.success("Amizade aceita!");
+    } catch (error) {
+      console.error(error);
+      toast.error("Erro ao aceitar amizade.");
+    }
+  };
+
+  const handleRemoveFriend = async (friendId: string) => {
+    if (!user) return;
+    try {
+      await removeFriend(user.uid, friendId);
+      toast.success("Amigo removido.");
+    } catch (error) {
+      console.error(error);
+      toast.error("Erro ao remover amigo.");
+    }
+  };
+
   const handleNewOpponent = async () => {
     resetGame();
     handleStartSearch();
@@ -473,6 +544,14 @@ const GameUI = () => {
                 }`} />
               </div>
             </div>
+            <Button variant="ghost" size="icon" onClick={() => setShowFriends(true)} className="text-zinc-400 hover:text-white hover:bg-zinc-900 relative">
+              <Users className="h-5 w-5" />
+              {friendRequests.length > 0 && (
+                <span className="absolute -top-1 -right-1 bg-orange-500 text-black text-[10px] font-black h-4 w-4 rounded-full flex items-center justify-center">
+                  {friendRequests.length}
+                </span>
+              )}
+            </Button>
             <Button variant="ghost" size="icon" onClick={() => setShowHistory(true)} className="text-zinc-400 hover:text-white hover:bg-zinc-900">
               <History className="h-5 w-5" />
             </Button>
@@ -882,13 +961,35 @@ const GameUI = () => {
 
                 <div className="flex flex-col gap-3 w-full pt-4">
                   {selectedProfile.uid !== user?.uid && (
-                    <Button 
-                      onClick={() => handleSendInvite(selectedProfile.uid)}
-                      className="w-full bg-orange-500 text-black hover:bg-orange-600 font-black uppercase italic tracking-tighter h-14 rounded-2xl text-lg flex gap-2"
-                    >
-                      <UserPlus className="h-5 w-5" />
-                      CONVIDAR PARA JOGAR
-                    </Button>
+                    <>
+                      <Button 
+                        onClick={() => handleSendInvite(selectedProfile.uid)}
+                        className="w-full bg-orange-500 text-black hover:bg-orange-600 font-black uppercase italic tracking-tighter h-14 rounded-2xl text-lg flex gap-2"
+                      >
+                        <UserPlus className="h-5 w-5" />
+                        CONVIDAR PARA JOGAR
+                      </Button>
+                      
+                      {profile?.friends?.includes(selectedProfile.uid) ? (
+                        <Button 
+                          variant="outline"
+                          onClick={() => handleRemoveFriend(selectedProfile.uid)}
+                          className="w-full border-red-500/50 text-red-500 hover:bg-red-500/10 font-black uppercase italic tracking-tighter h-12 rounded-2xl flex gap-2"
+                        >
+                          <UserMinus className="h-5 w-5" />
+                          REMOVER AMIGO
+                        </Button>
+                      ) : (
+                        <Button 
+                          variant="outline"
+                          onClick={() => handleSendFriendRequest(selectedProfile.uid)}
+                          className="w-full border-zinc-700 text-zinc-300 hover:bg-zinc-800 font-black uppercase italic tracking-tighter h-12 rounded-2xl flex gap-2"
+                        >
+                          <UserPlus className="h-5 w-5" />
+                          ADICIONAR AMIGO
+                        </Button>
+                      )}
+                    </>
                   )}
                   <Button 
                     variant="ghost" 
@@ -942,6 +1043,153 @@ const GameUI = () => {
                 </Button>
               </div>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Friends List Overlay */}
+      <AnimatePresence>
+        {showFriends && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-zinc-900 border border-zinc-800 w-full max-w-md rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[80vh]"
+            >
+              <div className="p-6 border-b border-zinc-800 flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-black italic uppercase tracking-tighter">Amigos</h2>
+                  <p className="text-zinc-500 font-bold uppercase text-[10px] tracking-widest">Sua lista de contatos</p>
+                </div>
+                <Button variant="ghost" size="icon" onClick={() => setShowFriends(false)} className="rounded-full">
+                  <X className="h-5 w-5" />
+                </Button>
+              </div>
+
+              <Tabs defaultValue="friends" className="flex-1 flex flex-col overflow-hidden">
+                <TabsList className="bg-zinc-950 mx-6 mt-4 p-1 rounded-xl">
+                  <TabsTrigger value="friends" className="flex-1 rounded-lg data-[state=active]:bg-zinc-800">
+                    Amigos ({friendsList.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="requests" className="flex-1 rounded-lg data-[state=active]:bg-zinc-800 relative">
+                    Pedidos
+                    {friendRequests.length > 0 && (
+                      <span className="ml-2 bg-orange-500 text-black text-[10px] font-black h-4 w-4 rounded-full flex items-center justify-center">
+                        {friendRequests.length}
+                      </span>
+                    )}
+                  </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="friends" className="flex-1 overflow-hidden p-6 mt-0">
+                  <ScrollArea className="h-full">
+                    {friendsList.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-12 text-center space-y-4">
+                        <Users className="h-12 w-12 text-zinc-800" />
+                        <p className="text-zinc-500 font-bold uppercase text-xs">Nenhum amigo adicionado ainda.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {friendsList.map(friend => (
+                          <div key={friend.uid} className="flex items-center justify-between group p-2 rounded-2xl hover:bg-zinc-800/50 transition-colors">
+                            <div className="flex items-center gap-3 cursor-pointer" onClick={() => { setSelectedProfile(friend); setShowFriends(false); }}>
+                              <div className="relative">
+                                <Avatar className="h-10 w-10 border border-zinc-800">
+                                  <AvatarImage src={friend.photoURL} />
+                                  <AvatarFallback>{friend.displayName[0]}</AvatarFallback>
+                                </Avatar>
+                                <span className={`absolute bottom-0 right-0 w-3 h-3 border-2 border-zinc-900 rounded-full ${
+                                  friend.status === 'online' ? 'bg-green-500' : 
+                                  friend.status === 'away' ? 'bg-yellow-500' : 
+                                  'bg-zinc-600'
+                                }`} />
+                              </div>
+                              <div>
+                                <p className="text-sm font-bold text-zinc-100">{friend.displayName}</p>
+                                <p className="text-[10px] font-black text-zinc-500 uppercase">
+                                  {friend.status === 'online' ? 'Online' : friend.status === 'away' ? 'Ausente' : 'Offline'}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Button 
+                                size="icon" 
+                                variant="ghost" 
+                                onClick={() => handleSendInvite(friend.uid)}
+                                className="h-8 w-8 text-orange-500 hover:bg-orange-500/10 rounded-full"
+                              >
+                                <Play className="h-4 w-4" />
+                              </Button>
+                              <Button 
+                                size="icon" 
+                                variant="ghost" 
+                                onClick={() => handleRemoveFriend(friend.uid)}
+                                className="h-8 w-8 text-zinc-500 hover:text-red-500 hover:bg-red-500/10 rounded-full"
+                              >
+                                <UserMinus className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </ScrollArea>
+                </TabsContent>
+
+                <TabsContent value="requests" className="flex-1 overflow-hidden p-6 mt-0">
+                  <ScrollArea className="h-full">
+                    {friendRequests.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-12 text-center space-y-4">
+                        <Clock className="h-12 w-12 text-zinc-800" />
+                        <p className="text-zinc-500 font-bold uppercase text-xs">Nenhum pedido pendente.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {friendRequests.map(req => (
+                          <div key={req.id} className="flex items-center justify-between p-3 bg-zinc-950 rounded-2xl border border-zinc-800">
+                            <div className="flex items-center gap-3">
+                              <Avatar className="h-10 w-10 border border-zinc-800">
+                                <AvatarImage src={req.fromPhoto} />
+                                <AvatarFallback>{req.fromName[0]}</AvatarFallback>
+                              </Avatar>
+                              <div>
+                                <p className="text-sm font-bold text-zinc-100">{req.fromName}</p>
+                                <p className="text-[10px] font-black text-orange-500 uppercase">Quer ser seu amigo!</p>
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button 
+                                size="icon" 
+                                onClick={() => handleAcceptFriendRequest(req.id)}
+                                className="bg-green-500 text-black hover:bg-green-600 rounded-full h-8 w-8"
+                              >
+                                <Check className="h-4 w-4" />
+                              </Button>
+                              <Button 
+                                size="icon" 
+                                variant="ghost"
+                                onClick={async () => {
+                                  await updateDoc(doc(db, 'friend_requests', req.id), { status: 'declined' });
+                                }}
+                                className="text-zinc-500 hover:text-red-500 hover:bg-red-500/10 rounded-full h-8 w-8"
+                              >
+                                <XCircle className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </ScrollArea>
+                </TabsContent>
+              </Tabs>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

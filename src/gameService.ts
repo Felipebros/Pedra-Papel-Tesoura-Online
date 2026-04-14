@@ -241,3 +241,70 @@ export const declineInvite = async (inviteId: string) => {
     updatedAt: serverTimestamp()
   });
 };
+
+export const sendFriendRequest = async (fromUser: { uid: string, displayName: string, photoURL: string }, toUid: string) => {
+  const requestsRef = collection(db, 'friend_requests');
+  
+  // Check if already friends or request exists
+  const q = query(requestsRef, where('from', '==', fromUser.uid), where('to', '==', toUid), where('status', '==', 'pending'));
+  const snap = await getDocs(q);
+  if (!snap.empty) return;
+
+  await addDoc(requestsRef, {
+    from: fromUser.uid,
+    fromName: fromUser.displayName,
+    fromPhoto: fromUser.photoURL,
+    to: toUid,
+    status: 'pending',
+    createdAt: serverTimestamp()
+  });
+};
+
+export const acceptFriendRequest = async (requestId: string) => {
+  const requestRef = doc(db, 'friend_requests', requestId);
+  const requestSnap = await getDoc(requestRef);
+  if (!requestSnap.exists()) return;
+
+  const data = requestSnap.data();
+  
+  await runTransaction(db, async (transaction) => {
+    const user1Ref = doc(db, 'users', data.from);
+    const user2Ref = doc(db, 'users', data.to);
+    
+    const user1Doc = await transaction.get(user1Ref);
+    const user2Doc = await transaction.get(user2Ref);
+    
+    if (!user1Doc.exists() || !user2Doc.exists()) return;
+    
+    const user1Data = user1Doc.data();
+    const user2Data = user2Doc.data();
+    
+    const friends1 = user1Data.friends || [];
+    const friends2 = user2Data.friends || [];
+    
+    if (!friends1.includes(data.to)) friends1.push(data.to);
+    if (!friends2.includes(data.from)) friends2.push(data.from);
+    
+    transaction.update(user1Ref, { friends: friends1 });
+    transaction.update(user2Ref, { friends: friends2 });
+    transaction.update(requestRef, { status: 'accepted' });
+  });
+};
+
+export const removeFriend = async (userId: string, friendId: string) => {
+  await runTransaction(db, async (transaction) => {
+    const user1Ref = doc(db, 'users', userId);
+    const user2Ref = doc(db, 'users', friendId);
+    
+    const user1Doc = await transaction.get(user1Ref);
+    const user2Doc = await transaction.get(user2Ref);
+    
+    if (!user1Doc.exists() || !user2Doc.exists()) return;
+    
+    const friends1 = (user1Doc.data().friends || []).filter((id: string) => id !== friendId);
+    const friends2 = (user2Doc.data().friends || []).filter((id: string) => id !== userId);
+    
+    transaction.update(user1Ref, { friends: friends1 });
+    transaction.update(user2Ref, { friends: friends2 });
+  });
+};
