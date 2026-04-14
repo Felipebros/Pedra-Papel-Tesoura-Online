@@ -296,14 +296,30 @@ const GameUI = () => {
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        setSelectedProfile(null);
-        setShowHistory(false);
-        setShowFriends(false);
+        if (selectedProfile || showHistory || showFriends) {
+          setSelectedProfile(null);
+          setShowHistory(false);
+          setShowFriends(false);
+        } else if (gameState === 'searching') {
+          handleCancelSearch();
+        } else if (gameState === 'playing') {
+          resetGame();
+        }
       }
     };
     window.addEventListener('keydown', handleEsc);
     return () => window.removeEventListener('keydown', handleEsc);
-  }, []);
+  }, [gameState, selectedProfile, showHistory, showFriends]);
+
+  useEffect(() => {
+    const handleEnter = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' && gameState === 'idle' && !selectedProfile && !showHistory && !showFriends) {
+        handleStartSearch();
+      }
+    };
+    window.addEventListener('keydown', handleEnter);
+    return () => window.removeEventListener('keydown', handleEnter);
+  }, [gameState, selectedProfile, showHistory, showFriends, profile]);
 
   const handleStartSearch = async () => {
     if (!profile) return;
@@ -596,9 +612,12 @@ const GameUI = () => {
                     <Button 
                       onClick={handleStartSearch}
                       size="lg" 
-                      className="bg-white text-black hover:bg-zinc-100 font-black uppercase italic tracking-tighter text-xl h-16 px-10 rounded-full shadow-xl"
+                      className="bg-white text-black hover:bg-zinc-100 font-black uppercase italic tracking-tighter text-xl h-16 px-10 rounded-full shadow-xl flex items-center gap-3 group"
                     >
                       JOGAR AGORA
+                      <span className="bg-black/10 px-2 py-0.5 rounded-md text-[10px] font-mono not-italic tracking-normal flex items-center gap-1 border border-black/5 group-hover:bg-black/20 transition-colors">
+                        <kbd className="font-sans">ENTER</kbd>
+                      </span>
                     </Button>
                   </div>
                   <div className="absolute -right-10 -bottom-10 opacity-10 rotate-12">
@@ -691,8 +710,9 @@ const GameUI = () => {
                 <h2 className="text-3xl font-black italic uppercase tracking-tighter">Procurando Oponente...</h2>
                 <p className="text-zinc-500 font-medium">Prepare sua estratégia, a batalha vai começar.</p>
               </div>
-              <Button variant="ghost" onClick={handleCancelSearch} className="text-zinc-500 hover:text-white">
+              <Button variant="ghost" onClick={handleCancelSearch} className="text-zinc-500 hover:text-white flex items-center gap-2 group">
                 Cancelar Busca
+                <span className="bg-zinc-800/50 px-1.5 py-0.5 rounded text-[9px] font-mono border border-zinc-800 group-hover:bg-zinc-800 transition-colors">ESC</span>
               </Button>
             </motion.div>
           )}
@@ -902,9 +922,10 @@ const GameUI = () => {
                   <Button 
                     onClick={resetGame}
                     variant="outline"
-                    className="border-zinc-800 text-zinc-500 hover:text-white hover:bg-zinc-900 font-black uppercase italic tracking-tighter h-12 px-8 rounded-full"
+                    className="border-zinc-800 text-zinc-500 hover:text-white hover:bg-zinc-900 font-black uppercase italic tracking-tighter h-12 px-8 rounded-full flex items-center gap-3 group"
                   >
                     SAIR DA PARTIDA
+                    <span className="bg-zinc-800/50 px-1.5 py-0.5 rounded text-[9px] font-mono not-italic tracking-normal border border-zinc-800 group-hover:bg-zinc-900 transition-colors">ESC</span>
                   </Button>
                 </div>
               </div>
