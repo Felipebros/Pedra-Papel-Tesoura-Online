@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, query, where, onSnapshot, addDoc, serverTimestamp, orderBy, limit, deleteDoc, getDocs, getDocFromServer } from 'firebase/firestore';
 
 // Initialize Firebase
@@ -56,6 +56,15 @@ export const googleProvider = new GoogleAuthProvider();
 // Auth helper
 export const loginWithGoogle = () => signInWithPopup(auth, googleProvider);
 export const logout = () => signOut(auth);
+
+export const registerWithEmail = (email: string, pass: string) => createUserWithEmailAndPassword(auth, email, pass);
+export const loginWithEmail = (email: string, pass: string) => signInWithEmailAndPassword(auth, email, pass);
+export const updateAuthProfile = (displayName: string) => {
+  if (auth.currentUser) {
+    return updateProfile(auth.currentUser, { displayName });
+  }
+  return Promise.reject('No user logged in');
+};
 
 // Types
 export type Move = 'rock' | 'paper' | 'scissors';

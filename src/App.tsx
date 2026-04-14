@@ -21,7 +21,7 @@ import {
   Clock
 } from 'lucide-react';
 import { useAuth, AuthProvider } from './AuthContext';
-import { loginWithGoogle, logout, Move, GameSession, UserProfile, db } from './firebase';
+import { loginWithGoogle, logout, Move, GameSession, UserProfile, db, registerWithEmail, loginWithEmail, updateAuthProfile } from './firebase';
 import { findMatch, submitMove, requestRematch, abandonGame, resetRound, sendInvite, acceptInvite, declineInvite, sendFriendRequest, acceptFriendRequest, removeFriend } from './gameService';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -32,7 +32,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
-import { collection, query, orderBy, limit, onSnapshot, doc, deleteDoc, where, getDoc, updateDoc } from 'firebase/firestore';
+import { collection, query, orderBy, limit, onSnapshot, doc, deleteDoc, where, getDoc, updateDoc, setDoc } from 'firebase/firestore';
 
 const GameUI = () => {
   const { user, profile, loading } = useAuth();
@@ -52,6 +52,12 @@ const GameUI = () => {
   const [friendRequests, setFriendRequests] = useState<any[]>([]);
   const [friendsList, setFriendsList] = useState<UserProfile[]>([]);
   const [showFriends, setShowFriends] = useState(false);
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [nickname, setNickname] = useState('');
+  const [isEditingNickname, setIsEditingNickname] = useState(false);
+  const [newNickname, setNewNickname] = useState('');
 
   useEffect(() => {
     // Force dark mode
@@ -484,10 +490,78 @@ const GameUI = () => {
     }
   };
 
+  const handleEmailAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      if (authMode === 'register') {
+        if (!nickname.trim()) {
+          toast.error("Por favor, insira um apelido.");
+          return;
+        }
+        const userCredential = await registerWithEmail(email, password);
+        const uid = userCredential.user.uid;
+        
+        // Update Auth Profile
+        await updateAuthProfile(nickname);
+        
+        // Ensure Firestore doc has the correct nickname
+        // We use setDoc with merge to either create it or update the existing one created by AuthContext
+        await setDoc(doc(db, 'users', uid), {
+          displayName: nickname
+        }, { merge: true });
+        
+        toast.success("Conta criada com sucesso!");
+      } else {
+        await loginWithEmail(email, password);
+        toast.success("Login realizado com sucesso!");
+      }
+    } catch (error: any) {
+      console.error("Auth Error:", error);
+      
+      let message = "Ocorreu um erro na autenticação.";
+      const errorStr = String(error).toLowerCase();
+      const errorCode = (error?.code || "").toLowerCase();
+
+      if (errorCode.includes('email-already-in-use') || errorStr.includes('email-already-in-use')) {
+        message = "Este e-mail já está em uso. Tente fazer login.";
+      } else if (errorCode.includes('invalid-email') || errorStr.includes('invalid-email')) {
+        message = "O e-mail inserido é inválido.";
+      } else if (errorCode.includes('weak-password') || errorStr.includes('weak-password')) {
+        message = "A senha é muito fraca. Use pelo menos 6 caracteres.";
+      } else if (errorCode.includes('user-not-found') || errorCode.includes('wrong-password') || errorCode.includes('invalid-credential') || errorStr.includes('wrong-password')) {
+        message = "E-mail ou senha incorretos.";
+      } else if (errorCode.includes('too-many-requests') || errorStr.includes('too-many-requests')) {
+        message = "Muitas tentativas falhas. Tente novamente mais tarde.";
+      } else if (errorCode.includes('operation-not-allowed') || errorStr.includes('operation-not-allowed')) {
+        message = "O login por e-mail não está ativado no Firebase.";
+      } else {
+        message = error?.message || message;
+      }
+
+      toast.error(message);
+    }
+  };
+
+  const handleUpdateNickname = async () => {
+    if (!user || !newNickname.trim()) return;
+    try {
+      await updateDoc(doc(db, 'users', user.uid), {
+        displayName: newNickname
+      });
+      await updateAuthProfile(newNickname);
+      setIsEditingNickname(false);
+      toast.success("Apelido atualizado!");
+    } catch (error) {
+      console.error(error);
+      toast.error("Erro ao atualizar apelido.");
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-zinc-950 text-white">
         <Loader2 className="h-12 w-12 animate-spin text-orange-500" />
+        <Toaster position="bottom-center" theme="dark" />
       </div>
     );
   }
@@ -509,34 +583,95 @@ const GameUI = () => {
           
           <Card className="border-zinc-800 bg-zinc-900/50 backdrop-blur-xl">
             <CardHeader>
-              <CardTitle className="text-white">Entrar no Jogo</CardTitle>
+              <CardTitle className="text-white">
+                {authMode === 'login' ? 'Entrar no Jogo' : 'Criar Conta'}
+              </CardTitle>
               <CardDescription className="text-zinc-400">
-                Faça login para salvar suas estatísticas e subir no ranking.
+                {authMode === 'login' 
+                  ? 'Faça login para salvar suas estatísticas e subir no ranking.' 
+                  : 'Escolha um apelido e comece sua jornada no PPT.'}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Button 
-                onClick={handleLogin}
-                className="w-full bg-white text-black hover:bg-zinc-200 font-bold h-12"
-              >
-                Continuar com Google
-              </Button>
-              <div className="relative">
+              <form onSubmit={handleEmailAuth} className="space-y-3">
+                {authMode === 'register' && (
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black uppercase text-zinc-500 ml-1">Apelido</label>
+                    <input 
+                      type="text" 
+                      placeholder="Como quer ser chamado?"
+                      value={nickname}
+                      onChange={(e) => setNickname(e.target.value)}
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl h-11 px-4 text-sm focus:outline-none focus:border-orange-500 transition-colors"
+                      required
+                    />
+                  </div>
+                )}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase text-zinc-500 ml-1">E-mail</label>
+                  <input 
+                    type="email" 
+                    placeholder="seu@email.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl h-11 px-4 text-sm focus:outline-none focus:border-orange-500 transition-colors"
+                    required
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase text-zinc-500 ml-1">Senha</label>
+                  <input 
+                    type="password" 
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl h-11 px-4 text-sm focus:outline-none focus:border-orange-500 transition-colors"
+                    required
+                  />
+                </div>
+                <Button 
+                  type="submit"
+                  className="w-full bg-orange-500 text-black hover:bg-orange-600 font-bold h-11 rounded-xl"
+                >
+                  {authMode === 'login' ? 'Entrar' : 'Cadastrar'}
+                </Button>
+              </form>
+
+              <div className="text-center">
+                <button 
+                  onClick={() => setAuthMode(authMode === 'login' ? 'register' : 'login')}
+                  className="text-xs text-zinc-400 hover:text-orange-500 transition-colors"
+                >
+                  {authMode === 'login' ? 'Não tem conta? Cadastre-se' : 'Já tem conta? Entre aqui'}
+                </button>
+              </div>
+
+              <div className="relative py-2">
                 <div className="absolute inset-0 flex items-center">
                   <span className="w-full border-t border-zinc-800" />
                 </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-zinc-900 px-2 text-zinc-500">Ou use e-mail</span>
+                <div className="relative flex justify-center text-[10px] uppercase">
+                  <span className="bg-zinc-900 px-2 text-zinc-500">Ou continue com</span>
                 </div>
               </div>
-              <div className="space-y-2">
-                <Button variant="outline" className="w-full border-zinc-800 text-white hover:bg-zinc-800 h-12" disabled>
-                  Login com E-mail (Em breve)
-                </Button>
-              </div>
+
+              <Button 
+                onClick={handleLogin}
+                variant="outline"
+                className="w-full border-zinc-800 text-white hover:bg-zinc-800 font-bold h-11 rounded-xl flex items-center justify-center gap-2"
+              >
+                <svg className="h-4 w-4" viewBox="0 0 24 24">
+                  <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                  <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                  <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" />
+                  <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                </svg>
+                Google
+              </Button>
             </CardContent>
           </Card>
         </motion.div>
+        <Toaster position="bottom-center" theme="dark" />
       </div>
     );
   }
@@ -556,7 +691,36 @@ const GameUI = () => {
           <div className="flex items-center gap-4">
             <div className="hidden sm:flex items-center gap-3 pr-4 border-r border-zinc-800">
               <div className="text-right">
-                <p className="text-sm font-bold text-zinc-100">{profile?.displayName}</p>
+                {isEditingNickname ? (
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="text"
+                      value={newNickname}
+                      onChange={(e) => setNewNickname(e.target.value)}
+                      className="bg-zinc-950 border border-zinc-800 rounded px-2 py-0.5 text-xs focus:outline-none focus:border-orange-500"
+                      autoFocus
+                    />
+                    <button onClick={handleUpdateNickname} className="text-green-500 hover:text-green-400">
+                      <Check size={14} />
+                    </button>
+                    <button onClick={() => setIsEditingNickname(false)} className="text-red-500 hover:text-red-400">
+                      <X size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 justify-end group">
+                    <p className="text-sm font-bold text-zinc-100">{profile?.displayName}</p>
+                    <button 
+                      onClick={() => {
+                        setNewNickname(profile?.displayName || '');
+                        setIsEditingNickname(true);
+                      }}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity text-zinc-500 hover:text-orange-500"
+                    >
+                      <UserCheck size={14} />
+                    </button>
+                  </div>
+                )}
                 <div className="flex gap-2 text-xs font-black uppercase">
                   <span className="text-green-500">{profile?.stats.wins} Vitórias</span>
                   <span className="text-red-500">{profile?.stats.losses} Derrotas</span>
