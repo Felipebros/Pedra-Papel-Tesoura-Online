@@ -293,6 +293,18 @@ const GameUI = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [gameState, currentGame, selectedMove]);
 
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSelectedProfile(null);
+        setShowHistory(false);
+        setShowFriends(false);
+      }
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, []);
+
   const handleStartSearch = async () => {
     if (!profile) return;
     
