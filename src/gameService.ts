@@ -106,6 +106,17 @@ export const submitMove = async (gameId: string, userId: string, move: Move) => 
         sessionScore: newSessionScore,
         updatedAt: serverTimestamp()
       });
+
+      // Archive the result for history
+      const resultRef = collection(db, 'game_results');
+      addDoc(resultRef, {
+        gameId: gameId,
+        players: playerIds,
+        playerData: data.playerData,
+        moves: newMoves,
+        winner,
+        createdAt: serverTimestamp()
+      });
     } else {
       transaction.update(gameRef, {
         moves: newMoves,

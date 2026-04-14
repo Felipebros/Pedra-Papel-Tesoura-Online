@@ -55,9 +55,8 @@ const GameUI = () => {
   useEffect(() => {
     if (user && showHistory) {
       const q = query(
-        collection(db, 'games'),
-        where('players', 'array-contains', user.uid),
-        where('status', '==', 'finished')
+        collection(db, 'game_results'),
+        where('players', 'array-contains', user.uid)
       );
       const unsubscribe = onSnapshot(q, (snapshot) => {
         const games = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GameSession));
@@ -73,9 +72,8 @@ const GameUI = () => {
       const opponentId = currentGame.players.find(id => id !== user.uid);
       if (opponentId) {
         const q = query(
-          collection(db, 'games'),
-          where('players', 'array-contains', user.uid),
-          where('status', '==', 'finished')
+          collection(db, 'game_results'),
+          where('players', 'array-contains', user.uid)
         );
         const unsubscribe = onSnapshot(q, (snapshot) => {
           let wins = 0, losses = 0, draws = 0;

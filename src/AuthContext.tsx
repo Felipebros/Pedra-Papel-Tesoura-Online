@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { auth, db, UserProfile } from './firebase';
 
 interface AuthContextType {
@@ -17,13 +17,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    let unsubscribeProfile: (() => void) | null = null;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
       
+      if (unsubscribeProfile) {
+        unsubscribeProfile();
+        unsubscribeProfile = null;
+      }
+
       if (firebaseUser) {
         const userDocRef = doc(db, 'users', firebaseUser.uid);
-        const userDoc = await getDoc(userDocRef);
         
+        // Initial check and creation if needed
+        const userDoc = await getDoc(userDocRef);
         if (!userDoc.exists()) {
           const newProfile: UserProfile = {
             uid: firebaseUser.uid,
@@ -33,17 +41,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             createdAt: serverTimestamp(),
           };
           await setDoc(userDocRef, newProfile);
-          setProfile(newProfile);
-        } else {
-          setProfile(userDoc.data() as UserProfile);
         }
+
+        // Real-time listener
+        unsubscribeProfile = onSnapshot(userDocRef, (doc) => {
+          if (doc.exists()) {
+            setProfile(doc.data() as UserProfile);
+          }
+          setLoading(false);
+        });
       } else {
         setProfile(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeProfile) unsubscribeProfile();
+    };
   }, []);
 
   return (
