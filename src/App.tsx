@@ -533,10 +533,15 @@ const GameUI = () => {
                               <AvatarImage src={player.photoURL} />
                               <AvatarFallback className="bg-zinc-800 text-zinc-100">{player.displayName[0]}</AvatarFallback>
                             </Avatar>
-                            <span className="text-sm font-bold truncate text-zinc-100 min-w-0">{player.displayName}</span>
+                            <span 
+                              title={player.displayName}
+                              className="text-sm font-bold truncate text-zinc-100 min-w-0 flex-1"
+                            >
+                              {player.displayName}
+                            </span>
                           </div>
-                          <div className="flex items-center gap-2 shrink-0 ml-2">
-                            <span className="text-sm font-black text-orange-500 whitespace-nowrap">{player.stats.wins} Vitórias</span>
+                          <div className="flex items-center gap-2 shrink-0 ml-4">
+                            <span className="text-sm font-black text-orange-500 whitespace-nowrap">{player.stats.wins} V</span>
                             {index < 3 && <Medal className={`h-5 w-5 shrink-0 ${index === 0 ? 'text-yellow-500' : index === 1 ? 'text-zinc-400' : 'text-amber-600'}`} />}
                           </div>
                         </div>
@@ -958,8 +963,13 @@ const GameUI = () => {
                                 <AvatarImage src={opponent?.photoURL} />
                                 <AvatarFallback className="bg-zinc-800 text-zinc-100">{opponent?.displayName[0]}</AvatarFallback>
                               </Avatar>
-                              <div className="min-w-0">
-                                <p className="text-sm font-bold text-zinc-100 truncate">{opponent?.displayName}</p>
+                              <div className="min-w-0 flex-1">
+                                <p 
+                                  title={opponent?.displayName}
+                                  className="text-sm font-bold text-zinc-100 truncate"
+                                >
+                                  {opponent?.displayName}
+                                </p>
                                 <p className={`text-[10px] font-black uppercase tracking-tighter ${isWinner ? 'text-green-500' : isDraw ? 'text-zinc-400' : 'text-red-500'}`}>
                                   {isWinner ? 'Vitória' : isDraw ? 'Empate' : 'Derrota'}
                                 </p>
