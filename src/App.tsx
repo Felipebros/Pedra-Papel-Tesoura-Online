@@ -468,7 +468,9 @@ const GameUI = () => {
                   <AvatarImage src={profile?.photoURL} />
                   <AvatarFallback><UserIcon /></AvatarFallback>
                 </Avatar>
-                <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-zinc-950 rounded-full" />
+                <span className={`absolute bottom-0 right-0 w-3 h-3 border-2 border-zinc-950 rounded-full ${
+                  profile?.status === 'away' ? 'bg-yellow-500' : 'bg-green-500'
+                }`} />
               </div>
             </div>
             <Button variant="ghost" size="icon" onClick={() => setShowHistory(true)} className="text-zinc-400 hover:text-white hover:bg-zinc-900">
@@ -551,7 +553,9 @@ const GameUI = () => {
                                 <AvatarFallback className="bg-zinc-800 text-zinc-100">{player.displayName[0]}</AvatarFallback>
                               </Avatar>
                               {player.isOnline && (
-                                <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 border-2 border-zinc-950 rounded-full" />
+                                <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 border-2 border-zinc-950 rounded-full ${
+                                  player.status === 'away' ? 'bg-yellow-500' : 'bg-green-500'
+                                }`} />
                               )}
                             </div>
                             <span 
@@ -629,7 +633,9 @@ const GameUI = () => {
                         <AvatarFallback>?</AvatarFallback>
                       </Avatar>
                       {opponentProfile?.isOnline && (
-                        <span className="absolute top-1 right-1 w-5 h-5 bg-green-500 border-4 border-zinc-950 rounded-full shadow-[0_0_10px_rgba(34,197,94,0.5)]" />
+                        <span className={`absolute top-1 right-1 w-5 h-5 border-4 border-zinc-950 rounded-full ${
+                          opponentProfile.status === 'away' ? 'bg-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.5)]' : 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]'
+                        }`} />
                       )}
                       {currentGame.moves[currentGame.players.find(id => id !== user.uid)!] && (
                         <Badge className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-green-500 text-black font-black uppercase text-[10px]">Pronto</Badge>
@@ -653,7 +659,9 @@ const GameUI = () => {
                       <AvatarImage src={profile?.photoURL} />
                       <AvatarFallback>EU</AvatarFallback>
                     </Avatar>
-                    <span className="absolute top-1 right-1 w-5 h-5 bg-green-500 border-4 border-zinc-950 rounded-full shadow-[0_0_10px_rgba(34,197,94,0.5)]" />
+                    <span className={`absolute top-1 right-1 w-5 h-5 border-4 border-zinc-950 rounded-full ${
+                      profile?.status === 'away' ? 'bg-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.5)]' : 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]'
+                    }`} />
                     {selectedMove && (
                       <Badge className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-orange-500 text-black font-black uppercase text-[10px]">Sua Jogada</Badge>
                     )}
@@ -844,9 +852,15 @@ const GameUI = () => {
                 <div>
                   <h2 className="text-3xl font-black italic uppercase tracking-tighter">{selectedProfile.displayName}</h2>
                   <div className="flex items-center justify-center gap-2 mt-1">
-                    <div className={`w-2 h-2 rounded-full ${selectedProfile.isOnline ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-zinc-600'}`} />
+                    <div className={`w-2 h-2 rounded-full ${
+                      selectedProfile.status === 'online' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 
+                      selectedProfile.status === 'away' ? 'bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.5)]' : 
+                      'bg-zinc-600'
+                    }`} />
                     <p className="text-zinc-500 font-bold uppercase text-[10px] tracking-widest">
-                      {selectedProfile.isOnline ? 'Online Agora' : 'Offline'}
+                      {selectedProfile.status === 'online' ? 'Online Agora' : 
+                       selectedProfile.status === 'away' ? 'Ausente' : 
+                       'Offline'}
                     </p>
                   </div>
                 </div>

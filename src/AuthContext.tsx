@@ -39,6 +39,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             photoURL: firebaseUser.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${firebaseUser.uid}`,
             stats: { wins: 0, losses: 0, draws: 0 },
             isOnline: true,
+            status: 'online',
             lastSeen: serverTimestamp(),
             createdAt: serverTimestamp(),
           };
@@ -67,24 +68,85 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     if (user) {
       const userDocRef = doc(db, 'users', user.uid);
-      updateDoc(userDocRef, {
-        isOnline: true,
-        lastSeen: serverTimestamp()
-      }).catch(console.error);
+      let awayTimer: any = null;
+      let offlineTimer: any = null;
+      let currentStatus: 'online' | 'away' | 'offline' = 'offline';
 
-      const handleVisibilityChange = () => {
-        if (document.visibilityState === 'hidden') {
-          updateDoc(userDocRef, { isOnline: false, lastSeen: serverTimestamp() }).catch(console.error);
+      const updateStatus = (status: 'online' | 'away' | 'offline') => {
+        if (currentStatus === status) return;
+        currentStatus = status;
+        
+        const data: any = {
+          isOnline: status !== 'offline',
+          status: status,
+          lastSeen: serverTimestamp()
+        };
+
+        updateDoc(userDocRef, data).catch(console.error);
+      };
+
+      const clearAllTimers = () => {
+        if (awayTimer) clearTimeout(awayTimer);
+        if (offlineTimer) clearTimeout(offlineTimer);
+      };
+
+      const startPresenceTimers = () => {
+        clearAllTimers();
+        
+        if (document.visibilityState === 'visible') {
+          updateStatus('online');
+          // Se ficar inativo por 5 min -> Ausente
+          awayTimer = setTimeout(() => {
+            updateStatus('away');
+            // Se continuar inativo por mais 5 min -> Offline
+            offlineTimer = setTimeout(() => {
+              updateStatus('offline');
+            }, 5 * 60 * 1000);
+          }, 5 * 60 * 1000);
         } else {
-          updateDoc(userDocRef, { isOnline: true, lastSeen: serverTimestamp() }).catch(console.error);
+          // Se trocar de aba -> Ausente imediatamente
+          updateStatus('away');
+          // Se ficar em outra aba por 5 min -> Offline
+          offlineTimer = setTimeout(() => {
+            updateStatus('offline');
+          }, 5 * 60 * 1000);
         }
       };
 
+      // Início
+      startPresenceTimers();
+
+      const handleActivity = () => {
+        if (document.visibilityState === 'visible') {
+          startPresenceTimers();
+        }
+      };
+
+      const handleVisibilityChange = () => {
+        startPresenceTimers();
+      };
+
+      const handleBeforeUnload = () => {
+        // Tenta marcar como offline ao fechar
+        updateStatus('offline');
+      };
+
       window.addEventListener('visibilitychange', handleVisibilityChange);
+      window.addEventListener('mousemove', handleActivity);
+      window.addEventListener('keydown', handleActivity);
+      window.addEventListener('click', handleActivity);
+      window.addEventListener('scroll', handleActivity);
+      window.addEventListener('beforeunload', handleBeforeUnload);
       
       return () => {
+        clearAllTimers();
         window.removeEventListener('visibilitychange', handleVisibilityChange);
-        updateDoc(userDocRef, { isOnline: false, lastSeen: serverTimestamp() }).catch(console.error);
+        window.removeEventListener('mousemove', handleActivity);
+        window.removeEventListener('keydown', handleActivity);
+        window.removeEventListener('click', handleActivity);
+        window.removeEventListener('scroll', handleActivity);
+        window.removeEventListener('beforeunload', handleBeforeUnload);
+        updateStatus('offline');
       };
     }
   }, [user]);

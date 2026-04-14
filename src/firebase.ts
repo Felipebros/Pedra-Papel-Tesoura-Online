@@ -73,6 +73,7 @@ export interface UserProfile {
   photoURL: string;
   stats: UserStats;
   isOnline?: boolean;
+  status?: 'online' | 'away' | 'offline';
   lastSeen?: any;
   createdAt: any;
 }
