@@ -525,19 +525,19 @@ const GameUI = () => {
                           className="flex items-center justify-between group cursor-pointer hover:bg-zinc-800/50 p-2 rounded-xl transition-colors"
                           onClick={() => setSelectedProfile(player)}
                         >
-                          <div className="flex items-center gap-3">
-                            <div className="w-6 text-xs font-mono text-zinc-500 font-bold">
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                            <div className="w-6 text-xs font-mono text-zinc-500 font-bold shrink-0">
                               {index + 1}.
                             </div>
-                            <Avatar className="h-8 w-8 border border-zinc-800">
+                            <Avatar className="h-8 w-8 border border-zinc-800 shrink-0">
                               <AvatarImage src={player.photoURL} />
                               <AvatarFallback className="bg-zinc-800 text-zinc-100">{player.displayName[0]}</AvatarFallback>
                             </Avatar>
-                            <span className="text-sm font-bold truncate max-w-[150px] text-zinc-100">{player.displayName}</span>
+                            <span className="text-sm font-bold truncate text-zinc-100 min-w-0">{player.displayName}</span>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-black text-orange-500">{player.stats.wins} Vitórias</span>
-                            {index < 3 && <Medal className={`h-5 w-5 ${index === 0 ? 'text-yellow-500' : index === 1 ? 'text-zinc-400' : 'text-amber-600'}`} />}
+                          <div className="flex items-center gap-2 shrink-0 ml-2">
+                            <span className="text-sm font-black text-orange-500 whitespace-nowrap">{player.stats.wins} Vitórias</span>
+                            {index < 3 && <Medal className={`h-5 w-5 shrink-0 ${index === 0 ? 'text-yellow-500' : index === 1 ? 'text-zinc-400' : 'text-amber-600'}`} />}
                           </div>
                         </div>
                       ))}
@@ -951,15 +951,15 @@ const GameUI = () => {
                           className="bg-zinc-950/50 border border-zinc-800/50 rounded-2xl p-4 flex items-center justify-between group hover:border-orange-500/30 transition-colors cursor-pointer"
                           onClick={() => setSelectedProfile(opponent as any)}
                         >
-                          <div className="flex items-center gap-4">
-                            <div className={`w-2 h-12 rounded-full ${isWinner ? 'bg-green-500' : isDraw ? 'bg-zinc-500' : 'bg-red-500'}`} />
-                            <div className="flex items-center gap-3">
-                              <Avatar className="h-10 w-10 border border-zinc-800">
+                          <div className="flex items-center gap-4 min-w-0 flex-1">
+                            <div className={`w-2 h-12 rounded-full shrink-0 ${isWinner ? 'bg-green-500' : isDraw ? 'bg-zinc-500' : 'bg-red-500'}`} />
+                            <div className="flex items-center gap-3 min-w-0">
+                              <Avatar className="h-10 w-10 border border-zinc-800 shrink-0">
                                 <AvatarImage src={opponent?.photoURL} />
                                 <AvatarFallback className="bg-zinc-800 text-zinc-100">{opponent?.displayName[0]}</AvatarFallback>
                               </Avatar>
-                              <div>
-                                <p className="text-sm font-bold text-zinc-100">{opponent?.displayName}</p>
+                              <div className="min-w-0">
+                                <p className="text-sm font-bold text-zinc-100 truncate">{opponent?.displayName}</p>
                                 <p className={`text-[10px] font-black uppercase tracking-tighter ${isWinner ? 'text-green-500' : isDraw ? 'text-zinc-400' : 'text-red-500'}`}>
                                   {isWinner ? 'Vitória' : isDraw ? 'Empate' : 'Derrota'}
                                 </p>
@@ -967,7 +967,7 @@ const GameUI = () => {
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-6">
+                          <div className="flex items-center gap-6 shrink-0 ml-4">
                             <div className="flex items-center gap-3 bg-zinc-900 px-3 py-2 rounded-xl border border-zinc-800">
                               <span className="text-xl">{myMove === 'rock' ? '✊' : myMove === 'paper' ? '✋' : '✌️'}</span>
                               <span className="text-xs font-black text-zinc-700 italic">VS</span>
