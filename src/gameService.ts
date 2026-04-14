@@ -11,7 +11,9 @@ import {
   increment,
   setDoc,
   limit,
-  updateDoc
+  updateDoc,
+  onSnapshot as firestoreOnSnapshot,
+  getDoc
 } from 'firebase/firestore';
 import { db, Move, GameSession } from './firebase';
 
@@ -172,6 +174,70 @@ export const abandonGame = async (gameId: string) => {
   const gameRef = doc(db, 'games', gameId);
   await updateDoc(gameRef, {
     status: 'abandoned',
+    updatedAt: serverTimestamp()
+  });
+};
+
+export const sendInvite = async (fromUser: { uid: string, displayName: string, photoURL: string }, toUid: string) => {
+  const invitesRef = collection(db, 'invites');
+  await addDoc(invitesRef, {
+    from: fromUser.uid,
+    fromName: fromUser.displayName,
+    fromPhoto: fromUser.photoURL,
+    to: toUid,
+    status: 'pending',
+    createdAt: serverTimestamp()
+  });
+};
+
+export const acceptInvite = async (inviteId: string) => {
+  const inviteRef = doc(db, 'invites', inviteId);
+  const inviteSnap = await getDoc(inviteRef);
+  if (!inviteSnap.exists()) return;
+  
+  const inviteData = inviteSnap.data();
+  
+  // Create game
+  const fromUserDoc = await getDoc(doc(db, 'users', inviteData.from));
+  const toUserDoc = await getDoc(doc(db, 'users', inviteData.to));
+  
+  if (!fromUserDoc.exists() || !toUserDoc.exists()) return;
+  
+  const fromUser = fromUserDoc.data();
+  const toUser = toUserDoc.data();
+
+  const gameData = {
+    players: [inviteData.from, inviteData.to],
+    playerData: {
+      [inviteData.from]: { displayName: fromUser.displayName, photoURL: fromUser.photoURL },
+      [inviteData.to]: { displayName: toUser.displayName, photoURL: toUser.photoURL }
+    },
+    status: 'playing',
+    moves: {},
+    winner: null,
+    sessionScore: {
+      [inviteData.from]: 0,
+      [inviteData.to]: 0
+    },
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  };
+  
+  const gameRef = await addDoc(collection(db, 'games'), gameData);
+  
+  await updateDoc(inviteRef, {
+    status: 'accepted',
+    gameId: gameRef.id,
+    updatedAt: serverTimestamp()
+  });
+  
+  return gameRef.id;
+};
+
+export const declineInvite = async (inviteId: string) => {
+  const inviteRef = doc(db, 'invites', inviteId);
+  await updateDoc(inviteRef, {
+    status: 'declined',
     updatedAt: serverTimestamp()
   });
 };

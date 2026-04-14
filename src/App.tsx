@@ -11,11 +11,14 @@ import {
   Swords,
   Loader2,
   History,
-  X
+  X,
+  UserPlus,
+  Check,
+  XCircle
 } from 'lucide-react';
 import { useAuth, AuthProvider } from './AuthContext';
 import { loginWithGoogle, logout, Move, GameSession, UserProfile, db } from './firebase';
-import { findMatch, submitMove, requestRematch, abandonGame, resetRound } from './gameService';
+import { findMatch, submitMove, requestRematch, abandonGame, resetRound, sendInvite, acceptInvite, declineInvite } from './gameService';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
@@ -39,6 +42,8 @@ const GameUI = () => {
   const [headToHead, setHeadToHead] = useState({ wins: 0, losses: 0, draws: 0 });
   const [lastMoves, setLastMoves] = useState<Record<string, Move>>({});
   const [lastWinner, setLastWinner] = useState<string | 'draw' | null>(null);
+  const [selectedProfile, setSelectedProfile] = useState<UserProfile | null>(null);
+  const [incomingInvite, setIncomingInvite] = useState<any>(null);
 
   useEffect(() => {
     // Force dark mode
@@ -157,6 +162,52 @@ const GameUI = () => {
   }, [currentGame?.id, user?.uid]);
 
   useEffect(() => {
+    if (user) {
+      // Listen for incoming invites
+      const qIncoming = query(
+        collection(db, 'invites'),
+        where('to', '==', user.uid),
+        where('status', '==', 'pending')
+      );
+      const unsubscribeIncoming = onSnapshot(qIncoming, (snapshot) => {
+        if (!snapshot.empty) {
+          const invite = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+          setIncomingInvite(invite);
+        } else {
+          setIncomingInvite(null);
+        }
+      });
+
+      // Listen for accepted outgoing invites
+      const qOutgoing = query(
+        collection(db, 'invites'),
+        where('from', '==', user.uid),
+        where('status', '==', 'accepted')
+      );
+      const unsubscribeOutgoing = onSnapshot(qOutgoing, (snapshot) => {
+        snapshot.docs.forEach(async (d) => {
+          const data = d.data();
+          if (data.gameId) {
+            const gameDoc = await getDoc(doc(db, 'games', data.gameId));
+            if (gameDoc.exists()) {
+              setCurrentGame({ id: gameDoc.id, ...gameDoc.data() } as GameSession);
+              setGameState('playing');
+              toast.success("Convite aceito! Partida iniciada.");
+              // Delete the invite record to avoid re-triggering
+              await deleteDoc(d.ref);
+            }
+          }
+        });
+      });
+
+      return () => {
+        unsubscribeIncoming();
+        unsubscribeOutgoing();
+      };
+    }
+  }, [user]);
+
+  useEffect(() => {
     if (currentGame?.status === 'finished') {
       const timer = setTimeout(() => {
         resetRound(currentGame.id).catch(console.error);
@@ -242,6 +293,47 @@ const GameUI = () => {
     } catch (error) {
       console.error(error);
       toast.error("Erro ao pedir revanche.");
+    }
+  };
+
+  const handleSendInvite = async (toUid: string) => {
+    if (!profile) return;
+    try {
+      await sendInvite(profile, toUid);
+      toast.success("Convite enviado!");
+      setSelectedProfile(null);
+    } catch (error) {
+      console.error(error);
+      toast.error("Erro ao enviar convite.");
+    }
+  };
+
+  const handleAcceptInvite = async () => {
+    if (!incomingInvite) return;
+    try {
+      const gameId = await acceptInvite(incomingInvite.id);
+      if (gameId) {
+        const gameDoc = await getDoc(doc(db, 'games', gameId));
+        if (gameDoc.exists()) {
+          setCurrentGame({ id: gameDoc.id, ...gameDoc.data() } as GameSession);
+          setGameState('playing');
+          toast.success("Partida iniciada!");
+        }
+      }
+      setIncomingInvite(null);
+    } catch (error) {
+      console.error(error);
+      toast.error("Erro ao aceitar convite.");
+    }
+  };
+
+  const handleDeclineInvite = async () => {
+    if (!incomingInvite) return;
+    try {
+      await declineInvite(incomingInvite.id);
+      setIncomingInvite(null);
+    } catch (error) {
+      console.error(error);
     }
   };
 
@@ -414,7 +506,11 @@ const GameUI = () => {
                   <ScrollArea className="h-[400px] pr-4">
                     <div className="space-y-4 mt-4">
                       {leaderboard.map((player, index) => (
-                        <div key={player.uid} className="flex items-center justify-between group">
+                        <div 
+                          key={player.uid} 
+                          className="flex items-center justify-between group cursor-pointer hover:bg-zinc-800/50 p-2 rounded-xl transition-colors"
+                          onClick={() => setSelectedProfile(player)}
+                        >
                           <div className="flex items-center gap-3">
                             <div className="w-6 text-xs font-mono text-zinc-500 font-bold">
                               {index + 1}.
@@ -466,13 +562,24 @@ const GameUI = () => {
             </motion.div>
           )}
 
-          {(gameState === 'playing') && currentGame && (
-            <motion.div 
-              key="game"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="space-y-8"
-            >
+          {(gameState === 'playing') && (
+            !currentGame ? (
+              <motion.div 
+                key="loading-game"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="flex flex-col items-center justify-center py-20 space-y-4"
+              >
+                <Loader2 className="h-12 w-12 animate-spin text-orange-500" />
+                <p className="text-zinc-500 font-bold uppercase tracking-widest text-xs">Carregando Partida...</p>
+              </motion.div>
+            ) : (
+              <motion.div 
+                key="game"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="space-y-8"
+              >
               <div className="flex items-center justify-between gap-4">
                 {/* Opponent */}
                 <div className="flex-1 flex flex-col items-center gap-4">
@@ -654,10 +761,122 @@ const GameUI = () => {
                 </div>
               </div>
             </motion.div>
-          )}
+          ))}
         </AnimatePresence>
       </main>
       <Toaster position="bottom-center" theme="dark" />
+
+      {/* Profile Modal */}
+      <AnimatePresence>
+        {selectedProfile && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-zinc-900 border border-zinc-800 w-full max-w-md rounded-3xl overflow-hidden shadow-2xl"
+            >
+              <div className="p-8 flex flex-col items-center text-center space-y-6">
+                <div className="relative">
+                  <Avatar className="h-32 w-32 border-4 border-orange-500/20">
+                    <AvatarImage src={selectedProfile.photoURL} />
+                    <AvatarFallback className="text-4xl">{selectedProfile.displayName[0]}</AvatarFallback>
+                  </Avatar>
+                  <div className="absolute -bottom-2 -right-2 bg-orange-500 p-2 rounded-full shadow-lg">
+                    <UserIcon className="text-black h-5 w-5" />
+                  </div>
+                </div>
+                
+                <div>
+                  <h2 className="text-3xl font-black italic uppercase tracking-tighter">{selectedProfile.displayName}</h2>
+                  <p className="text-zinc-500 font-bold uppercase text-xs tracking-widest mt-1">Perfil do Jogador</p>
+                </div>
+
+                <div className="grid grid-cols-3 gap-4 w-full">
+                  <div className="bg-zinc-950/50 p-3 rounded-2xl border border-zinc-800">
+                    <p className="text-[10px] font-black text-zinc-600 uppercase">Vitórias</p>
+                    <p className="text-xl font-black text-green-500">{selectedProfile.stats.wins}</p>
+                  </div>
+                  <div className="bg-zinc-950/50 p-3 rounded-2xl border border-zinc-800">
+                    <p className="text-[10px] font-black text-zinc-600 uppercase">Empates</p>
+                    <p className="text-xl font-black text-zinc-400">{selectedProfile.stats.draws}</p>
+                  </div>
+                  <div className="bg-zinc-950/50 p-3 rounded-2xl border border-zinc-800">
+                    <p className="text-[10px] font-black text-zinc-600 uppercase">Derrotas</p>
+                    <p className="text-xl font-black text-red-500">{selectedProfile.stats.losses}</p>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-3 w-full pt-4">
+                  {selectedProfile.uid !== user?.uid && (
+                    <Button 
+                      onClick={() => handleSendInvite(selectedProfile.uid)}
+                      className="w-full bg-orange-500 text-black hover:bg-orange-600 font-black uppercase italic tracking-tighter h-14 rounded-2xl text-lg flex gap-2"
+                    >
+                      <UserPlus className="h-5 w-5" />
+                      CONVIDAR PARA JOGAR
+                    </Button>
+                  )}
+                  <Button 
+                    variant="ghost" 
+                    onClick={() => setSelectedProfile(null)}
+                    className="w-full text-zinc-500 hover:text-white font-black uppercase italic tracking-tighter h-12"
+                  >
+                    FECHAR
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Incoming Invite Notification */}
+      <AnimatePresence>
+        {incomingInvite && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 50, scale: 0.9 }}
+            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[120] w-full max-w-sm px-4"
+          >
+            <div className="bg-zinc-900 border-2 border-orange-500 rounded-3xl p-4 shadow-2xl flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <Avatar className="h-12 w-12 border border-zinc-800">
+                  <AvatarImage src={incomingInvite.fromPhoto} />
+                  <AvatarFallback>{incomingInvite.fromName[0]}</AvatarFallback>
+                </Avatar>
+                <div>
+                  <p className="text-sm font-bold text-zinc-100">{incomingInvite.fromName}</p>
+                  <p className="text-[10px] font-black text-orange-500 uppercase italic">Te convidou!</p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button 
+                  size="icon" 
+                  onClick={handleAcceptInvite}
+                  className="bg-green-500 text-black hover:bg-green-600 rounded-full h-10 w-10"
+                >
+                  <Check className="h-5 w-5" />
+                </Button>
+                <Button 
+                  size="icon" 
+                  variant="ghost"
+                  onClick={handleDeclineInvite}
+                  className="text-zinc-500 hover:text-red-500 hover:bg-red-500/10 rounded-full h-10 w-10"
+                >
+                  <XCircle className="h-5 w-5" />
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Match History Overlay */}
       <AnimatePresence>
@@ -708,7 +927,11 @@ const GameUI = () => {
                       const opponentMove = game.moves[opponentId!];
 
                       return (
-                        <div key={game.id} className="bg-zinc-950/50 border border-zinc-800/50 rounded-2xl p-4 flex items-center justify-between group hover:border-orange-500/30 transition-colors">
+                        <div 
+                          key={game.id} 
+                          className="bg-zinc-950/50 border border-zinc-800/50 rounded-2xl p-4 flex items-center justify-between group hover:border-orange-500/30 transition-colors cursor-pointer"
+                          onClick={() => setSelectedProfile(opponent as any)}
+                        >
                           <div className="flex items-center gap-4">
                             <div className={`w-2 h-12 rounded-full ${isWinner ? 'bg-green-500' : isDraw ? 'bg-zinc-500' : 'bg-red-500'}`} />
                             <div className="flex items-center gap-3">

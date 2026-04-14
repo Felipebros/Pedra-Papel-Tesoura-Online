@@ -31,5 +31,19 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow write: if isOwner(userId);
     }
+
+    // Invites
+    match /invites/{inviteId} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.from || request.auth.uid == resource.data.to);
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && (request.auth.uid == resource.data.to || request.auth.uid == resource.data.from);
+      allow delete: if isAuthenticated() && (request.auth.uid == resource.data.from || request.auth.uid == resource.data.to);
+    }
+
+    // Game Results
+    match /game_results/{resultId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+    }
   }
 }
