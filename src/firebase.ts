@@ -72,6 +72,8 @@ export interface UserProfile {
   displayName: string;
   photoURL: string;
   stats: UserStats;
+  isOnline?: boolean;
+  lastSeen?: any;
   createdAt: any;
 }
 

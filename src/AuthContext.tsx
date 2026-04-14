@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, onSnapshot, updateDoc } from 'firebase/firestore';
 import { auth, db, UserProfile } from './firebase';
 
 interface AuthContextType {
@@ -38,6 +38,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             displayName: firebaseUser.displayName || 'Jogador',
             photoURL: firebaseUser.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${firebaseUser.uid}`,
             stats: { wins: 0, losses: 0, draws: 0 },
+            isOnline: true,
+            lastSeen: serverTimestamp(),
             createdAt: serverTimestamp(),
           };
           await setDoc(userDocRef, newProfile);
@@ -61,6 +63,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (unsubscribeProfile) unsubscribeProfile();
     };
   }, []);
+
+  useEffect(() => {
+    if (user) {
+      const userDocRef = doc(db, 'users', user.uid);
+      updateDoc(userDocRef, {
+        isOnline: true,
+        lastSeen: serverTimestamp()
+      }).catch(console.error);
+
+      const handleVisibilityChange = () => {
+        if (document.visibilityState === 'hidden') {
+          updateDoc(userDocRef, { isOnline: false, lastSeen: serverTimestamp() }).catch(console.error);
+        } else {
+          updateDoc(userDocRef, { isOnline: true, lastSeen: serverTimestamp() }).catch(console.error);
+        }
+      };
+
+      window.addEventListener('visibilitychange', handleVisibilityChange);
+      
+      return () => {
+        window.removeEventListener('visibilitychange', handleVisibilityChange);
+        updateDoc(userDocRef, { isOnline: false, lastSeen: serverTimestamp() }).catch(console.error);
+      };
+    }
+  }, [user]);
 
   return (
     <AuthContext.Provider value={{ user, profile, loading }}>

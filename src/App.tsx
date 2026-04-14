@@ -44,6 +44,7 @@ const GameUI = () => {
   const [lastWinner, setLastWinner] = useState<string | 'draw' | null>(null);
   const [selectedProfile, setSelectedProfile] = useState<UserProfile | null>(null);
   const [incomingInvite, setIncomingInvite] = useState<any>(null);
+  const [opponentProfile, setOpponentProfile] = useState<UserProfile | null>(null);
 
   useEffect(() => {
     // Force dark mode
@@ -76,11 +77,18 @@ const GameUI = () => {
     if (user && currentGame) {
       const opponentId = currentGame.players.find(id => id !== user.uid);
       if (opponentId) {
+        // Listen for opponent's online status
+        const unsubscribeOpponent = onSnapshot(doc(db, 'users', opponentId), (doc) => {
+          if (doc.exists()) {
+            setOpponentProfile(doc.data() as UserProfile);
+          }
+        });
+
         const q = query(
           collection(db, 'game_results'),
           where('players', 'array-contains', user.uid)
         );
-        const unsubscribe = onSnapshot(q, (snapshot) => {
+        const unsubscribeStats = onSnapshot(q, (snapshot) => {
           let wins = 0, losses = 0, draws = 0;
           snapshot.docs.forEach(doc => {
             const data = doc.data() as GameSession;
@@ -92,8 +100,13 @@ const GameUI = () => {
           });
           setHeadToHead({ wins, losses, draws });
         });
-        return () => unsubscribe();
+        return () => {
+          unsubscribeOpponent();
+          unsubscribeStats();
+        };
       }
+    } else {
+      setOpponentProfile(null);
     }
   }, [user, currentGame?.id]);
 
@@ -450,10 +463,13 @@ const GameUI = () => {
                   <span className="text-red-500">{profile?.stats.losses} Derrotas</span>
                 </div>
               </div>
-              <Avatar className="h-10 w-10 border-2 border-orange-500/20">
-                <AvatarImage src={profile?.photoURL} />
-                <AvatarFallback><UserIcon /></AvatarFallback>
-              </Avatar>
+              <div className="relative">
+                <Avatar className="h-10 w-10 border-2 border-orange-500/20">
+                  <AvatarImage src={profile?.photoURL} />
+                  <AvatarFallback><UserIcon /></AvatarFallback>
+                </Avatar>
+                <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-zinc-950 rounded-full" />
+              </div>
             </div>
             <Button variant="ghost" size="icon" onClick={() => setShowHistory(true)} className="text-zinc-400 hover:text-white hover:bg-zinc-900">
               <History className="h-5 w-5" />
@@ -529,10 +545,15 @@ const GameUI = () => {
                             <div className="w-6 text-xs font-mono text-zinc-500 font-bold shrink-0">
                               {index + 1}.
                             </div>
-                            <Avatar className="h-8 w-8 border border-zinc-800 shrink-0">
-                              <AvatarImage src={player.photoURL} />
-                              <AvatarFallback className="bg-zinc-800 text-zinc-100">{player.displayName[0]}</AvatarFallback>
-                            </Avatar>
+                            <div className="relative shrink-0">
+                              <Avatar className="h-8 w-8 border border-zinc-800">
+                                <AvatarImage src={player.photoURL} />
+                                <AvatarFallback className="bg-zinc-800 text-zinc-100">{player.displayName[0]}</AvatarFallback>
+                              </Avatar>
+                              {player.isOnline && (
+                                <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 border-2 border-zinc-950 rounded-full" />
+                              )}
+                            </div>
                             <span 
                               title={player.displayName}
                               className="text-sm font-bold truncate text-zinc-100 min-w-0 flex-1"
@@ -602,15 +623,18 @@ const GameUI = () => {
               <div className="flex items-center justify-between gap-4">
                 {/* Opponent */}
                 <div className="flex-1 flex flex-col items-center gap-4">
-                  <div className="relative">
-                    <Avatar className="h-24 w-24 border-4 border-zinc-800">
-                      <AvatarImage src={currentGame.playerData[currentGame.players.find(id => id !== user.uid)!]?.photoURL} />
-                      <AvatarFallback>?</AvatarFallback>
-                    </Avatar>
-                    {currentGame.moves[currentGame.players.find(id => id !== user.uid)!] && (
-                      <Badge className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-green-500 text-black font-black uppercase text-[10px]">Pronto</Badge>
-                    )}
-                  </div>
+                    <div className="relative">
+                      <Avatar className="h-24 w-24 border-4 border-zinc-800">
+                        <AvatarImage src={currentGame.playerData[currentGame.players.find(id => id !== user.uid)!]?.photoURL} />
+                        <AvatarFallback>?</AvatarFallback>
+                      </Avatar>
+                      {opponentProfile?.isOnline && (
+                        <span className="absolute top-1 right-1 w-5 h-5 bg-green-500 border-4 border-zinc-950 rounded-full shadow-[0_0_10px_rgba(34,197,94,0.5)]" />
+                      )}
+                      {currentGame.moves[currentGame.players.find(id => id !== user.uid)!] && (
+                        <Badge className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-green-500 text-black font-black uppercase text-[10px]">Pronto</Badge>
+                      )}
+                    </div>
                   <div className="text-center">
                     <p className="font-black uppercase italic tracking-tighter text-zinc-500 text-xs">Oponente</p>
                     <p className="text-xl font-bold text-zinc-100">{currentGame.playerData[currentGame.players.find(id => id !== user.uid)!]?.displayName}</p>
@@ -629,6 +653,7 @@ const GameUI = () => {
                       <AvatarImage src={profile?.photoURL} />
                       <AvatarFallback>EU</AvatarFallback>
                     </Avatar>
+                    <span className="absolute top-1 right-1 w-5 h-5 bg-green-500 border-4 border-zinc-950 rounded-full shadow-[0_0_10px_rgba(34,197,94,0.5)]" />
                     {selectedMove && (
                       <Badge className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-orange-500 text-black font-black uppercase text-[10px]">Sua Jogada</Badge>
                     )}
@@ -818,7 +843,12 @@ const GameUI = () => {
                 
                 <div>
                   <h2 className="text-3xl font-black italic uppercase tracking-tighter">{selectedProfile.displayName}</h2>
-                  <p className="text-zinc-500 font-bold uppercase text-xs tracking-widest mt-1">Perfil do Jogador</p>
+                  <div className="flex items-center justify-center gap-2 mt-1">
+                    <div className={`w-2 h-2 rounded-full ${selectedProfile.isOnline ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-zinc-600'}`} />
+                    <p className="text-zinc-500 font-bold uppercase text-[10px] tracking-widest">
+                      {selectedProfile.isOnline ? 'Online Agora' : 'Offline'}
+                    </p>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-3 gap-4 w-full">
