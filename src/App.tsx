@@ -227,6 +227,20 @@ const GameUI = () => {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [currentGame?.id, gameState]);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (gameState !== 'playing' || !currentGame || selectedMove || currentGame.status === 'finished') return;
+      
+      const key = e.key.toLowerCase();
+      if (key === 'a') handleMove('rock');
+      if (key === 's') handleMove('paper');
+      if (key === 'd') handleMove('scissors');
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [gameState, currentGame, selectedMove]);
+
   const handleStartSearch = async () => {
     if (!profile) return;
     
@@ -676,9 +690,14 @@ const GameUI = () => {
                         {move === 'paper' && '✋'}
                         {move === 'scissors' && '✌️'}
                       </div>
-                      <span className="font-black uppercase italic tracking-tighter text-sm">{
-                        move === 'rock' ? 'Pedra' : move === 'paper' ? 'Papel' : 'Tesoura'
-                      }</span>
+                      <div className="flex flex-col items-center gap-1">
+                        <span className="font-black uppercase italic tracking-tighter text-sm">{
+                          move === 'rock' ? 'Pedra' : move === 'paper' ? 'Papel' : 'Tesoura'
+                        }</span>
+                        <kbd className="px-2 py-0.5 rounded bg-zinc-800 text-[10px] font-mono text-zinc-400 border border-zinc-700 group-hover:border-orange-500/50 transition-colors">
+                          {move === 'rock' ? 'A' : move === 'paper' ? 'S' : 'D'}
+                        </kbd>
+                      </div>
                     </motion.button>
                   ))}
                 </div>
