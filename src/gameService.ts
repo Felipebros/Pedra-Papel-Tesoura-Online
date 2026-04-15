@@ -57,6 +57,38 @@ export const findMatch = async (user: { uid: string, displayName: string, photoU
   }
 };
 
+export const joinMatch = async (user: { uid: string, displayName: string, photoURL: string }, opponentUid: string) => {
+  const opponentRef = doc(db, 'matchmaking', opponentUid);
+  const opponentSnap = await getDoc(opponentRef);
+  
+  if (!opponentSnap.exists()) {
+    throw new Error('Oponente não está mais procurando partida.');
+  }
+  
+  const opponent = opponentSnap.data();
+  
+  const gameData = {
+    players: [user.uid, opponent.uid],
+    playerData: {
+      [user.uid]: { displayName: user.displayName, photoURL: user.photoURL },
+      [opponent.uid]: { displayName: opponent.displayName, photoURL: opponent.photoURL }
+    },
+    status: 'playing',
+    moves: {},
+    winner: null,
+    sessionScore: {
+      [user.uid]: 0,
+      [opponent.uid]: 0
+    },
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  };
+  
+  const gameRef = await addDoc(collection(db, 'games'), gameData);
+  await deleteDoc(opponentRef);
+  return gameRef.id;
+};
+
 export const submitMove = async (gameId: string, userId: string, move: Move) => {
   const gameRef = doc(db, 'games', gameId);
   

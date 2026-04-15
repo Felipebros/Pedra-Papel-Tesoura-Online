@@ -30,6 +30,7 @@ service cloud.firestore {
     match /matchmaking/{userId} {
       allow read: if isAuthenticated();
       allow write: if isOwner(userId);
+      allow delete: if isAuthenticated();
     }
 
     // Invites

@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { useAuth, AuthProvider } from './AuthContext';
 import { loginWithGoogle, logout, Move, GameSession, UserProfile, db, registerWithEmail, loginWithEmail, updateAuthProfile } from './firebase';
-import { findMatch, submitMove, requestRematch, abandonGame, resetRound, sendInvite, acceptInvite, declineInvite, sendFriendRequest, acceptFriendRequest, removeFriend } from './gameService';
+import { findMatch, joinMatch, submitMove, requestRematch, abandonGame, resetRound, sendInvite, acceptInvite, declineInvite, sendFriendRequest, acceptFriendRequest, removeFriend } from './gameService';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
@@ -103,6 +103,7 @@ const GameUI = () => {
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [tempPhotoURL, setTempPhotoURL] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [waitingPlayers, setWaitingPlayers] = useState<any[]>([]);
   const categoryRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const scrollToCategory = (category: string) => {
@@ -121,7 +122,17 @@ const GameUI = () => {
       const users = snapshot.docs.map(doc => doc.data() as UserProfile);
       setLeaderboard(users);
     });
-    return () => unsubscribe();
+
+    const matchmakingQ = query(collection(db, 'matchmaking'), orderBy('createdAt', 'desc'));
+    const unsubscribeMatchmaking = onSnapshot(matchmakingQ, (snapshot) => {
+      const players = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setWaitingPlayers(players);
+    });
+
+    return () => {
+      unsubscribe();
+      unsubscribeMatchmaking();
+    };
   }, []);
 
   useEffect(() => {
@@ -446,6 +457,32 @@ const GameUI = () => {
     } catch (error) {
       console.error(error);
       toast.error("Erro ao pedir revanche.");
+    }
+  };
+
+  const handleJoinMatch = async (opponentUid: string) => {
+    if (!profile) return;
+    
+    // Don't join your own match
+    if (opponentUid === profile.uid) {
+      toast.error("Você já está na fila!");
+      return;
+    }
+
+    try {
+      const gameId = await joinMatch(profile, opponentUid);
+      if (gameId) {
+        const gameDoc = await getDoc(doc(db, 'games', gameId));
+        if (gameDoc.exists()) {
+          const gameData = { id: gameDoc.id, ...gameDoc.data() } as GameSession;
+          setCurrentGame(gameData);
+          setGameState('playing');
+          toast.success("Partida iniciada!");
+        }
+      }
+    } catch (error: any) {
+      console.error(error);
+      toast.error(error.message || "Erro ao entrar na partida.");
     }
   };
 
@@ -889,6 +926,38 @@ const GameUI = () => {
                     </Card>
                   ))}
                 </div>
+
+                {waitingPlayers.filter(p => p.uid !== user?.uid).length > 0 && (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                      <h3 className="text-xs font-black text-zinc-500 tracking-widest uppercase">Jogadores Esperando</h3>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {waitingPlayers.filter(p => p.uid !== user?.uid).map((player) => (
+                        <div 
+                          key={player.id}
+                          className="bg-zinc-900/50 border border-zinc-800 p-4 rounded-2xl flex items-center justify-between group hover:border-orange-500/50 transition-colors"
+                        >
+                          <div className="flex items-center gap-3">
+                            <UserAvatar src={player.photoURL} name={player.displayName} className="h-10 w-10" />
+                            <div>
+                              <p className="text-sm font-bold text-zinc-100">{player.displayName}</p>
+                              <p className="text-[10px] font-black text-green-500 uppercase">Procurando Jogo...</p>
+                            </div>
+                          </div>
+                          <Button 
+                            size="sm" 
+                            onClick={() => handleJoinMatch(player.uid)}
+                            className="bg-orange-500 text-black hover:bg-orange-600 font-black uppercase italic tracking-tighter text-[10px] h-8 rounded-xl px-4"
+                          >
+                            DESAFIAR
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <Card className="bg-zinc-900/50 border-zinc-800 h-fit">
