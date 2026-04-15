@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Trophy, 
@@ -34,6 +34,49 @@ import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
 import { collection, query, orderBy, limit, onSnapshot, doc, deleteDoc, where, getDoc, updateDoc, setDoc } from 'firebase/firestore';
 
+const PROFILE_EMOJIS = {
+  'Carinhas': [
+    '😀', '😃', '😄', '😁', '😅', '😂', '🤣', '😊', '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚', '😋', '😛', '😝', '😜', '🤪', '🤨', '🧐', '🤓', '😎', '🤩', '🥳', '😏', '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣', '😖', '😫', '😩', '🥺', '😢', '😭', '😤', '😠', '😡', '🤬', '🤯', '😳', '🥵', '🥶', '😱', '😨', '😰', '😥', '😓', '🤗', '🤔', '🤭', '🤫', '🤥', '😶', '😐', '😑', '😬', '🙄', '😯', '😦', '😧', '😮', '😲', '🥱', '😴', '🤤', '😪', '😵', '🤐', '🥴', '🤢', '🤮', '🤧', '😷', '🤒', '🤕', '🤑', '🤠', '😈', '👿', '👹', '👺', '🤡', '👻', '💀', '☠️', '👽', '👾', '🤖', '💩'
+  ],
+  'Animais': [
+    '🦊', '🐱', '🐭', '🐹', '🐰', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🐔', '🐧', '🐦', '🐤', '🦄', '🐝', '🐢', '🐙', '🐬', '🦈', '🐘', '🦒', '🦘', '🐕', '🐈', '🐉', '🦖', '🦕', '🐍', '🦎', '🦑', '🦐', '🦞', '🦀', '🐡', '🐠', '🐟', '🐳', '🐋', '🐊', '🐅', '🐆', '🦓', '🦍', '🦧', '🦛', '🦏', '🐪', '🐫', '🐃', '🐂', '🐄', '🐎', '🐖', '🐏', '🐑', '🐐', '🦌', '🐩', '🦮', '🐕‍🦺', '🐈‍⬛', '🐓', '🦃', '🦚', '🦜', '🦢', '🦩', '🕊️', '🐇', '🦝', '🦨', '🦡', '🦦', '🦥', '🐁', '🐀', '🐿️', '🦔', '🦇', '🦉'
+  ],
+  'Atividades': [
+    '⚽', '🏀', '🏈', '⚾', '🎾', '🏐', '🏉', '🎱', '🏓', '🏸', '🥅', '🥊', '🥋', '🥇', '🥈', '🥉', '🏆', '🎖️', '🏅', '🎫', '🎟️', '🎭', '🎨', '🎬', '🎤', '🎧', '🎼', '🎹', '🥁', '🎷', '🎺', '🎸', '🎻', '🎲', '♟️', '🎯', '🎳', '🎮', '🎰', '🧩', '🛹', '🛼', '🛶', '⛵', '⛷️', '🏂', '🏋️', '🚴', '🚵', '🤸', '🤼', '🤽', '🤾', '🤺'
+  ],
+  'Comida': [
+    '🍎', '🍐', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🫐', '🍈', '🍒', '🍑', '🥭', '🍍', '🥥', '🥝', '🍅', '🍆', '🥑', '🥦', '🥬', '🥒', '🌽', '🥕', '🫒', '🧄', '🧅', '🥔', '🍠', '🥐', '🥯', '🍞', '🥖', '🥨', '🧀', '🥚', '🍳', '🧈', '🥞', '🧇', '🥓', '🥩', '🍗', '🍖', '🦴', '🌭', '🍔', '🍟', '🍕', '🥪', '🥙', '🧆', '🌮', '🌯', '🫔', '🥗', '🥘', '🫕', '🥣', '🍝', '🍜', '🍲', '🍛', '🍣', '🍱', '🥟', '🍤', '🍙', '🍚', '🍘', '🍥', '🥠', '🍢', '🍡', '🍧', '🍨', '🍦', '🥧', '🧁', '🍰', '🎂', '🍮', '🍭', '🍬', '🍫', '🍿', '🍩', '🍪', '🌰', '🥜', '🍯'
+  ],
+  'Objetos': [
+    '🚀', '🌈', '🔥', '💎', '👑', '🍀', '💡', '🔦', '🕯️', '🔑', '🗝️', '🔨', '🪓', '⛏️', '⚒️', '🛠️', '🗡️', '⚔️', '🔫', '🛡️', '🔧', '🪛', '🔩', '⚙️', '🗜️', '⚖️', '🦯', '🔗', '⛓️', '🪝', '🧰', '🧲', '🪜', '🧪', '🧫', '🧬', '🔬', '🔭', '📡', '💉', '🩸', '💊', '🩹', '🩺', '🚪', '🛗', '🪞', '🪟', '🛌', '🛏️', '🛋️', '🪑', '🚽', '🪠', '🚿', '🛁', '🪤', '🪒', '🧴', '🧷', '🧹', '🧺', '🧻', '🧼', '🪣', '🧽', '🪮', '🧿', '🚬', '⚰️', '🪦', '⚱️'
+  ]
+};
+
+const CATEGORY_SYMBOLS: Record<string, string> = {
+  'Carinhas': '😀',
+  'Animais': '🦊',
+  'Atividades': '⚽',
+  'Comida': '🍎',
+  'Objetos': '🚀'
+};
+
+const UserAvatar = ({ src, name, className, fallback }: { src?: string, name?: string, className?: string, fallback?: React.ReactNode }) => {
+  const isEmoji = src && src.length <= 4 && !src.startsWith('http');
+  
+  return (
+    <Avatar className={className}>
+      {!isEmoji && src && <AvatarImage src={src} />}
+      <AvatarFallback className="bg-zinc-800 text-zinc-100 flex items-center justify-center overflow-hidden">
+        {isEmoji ? (
+          <span className="text-[1.5em] leading-none select-none">{src}</span>
+        ) : (
+          fallback || (name ? name[0].toUpperCase() : <UserIcon size={16} />)
+        )}
+      </AvatarFallback>
+    </Avatar>
+  );
+};
+
 const GameUI = () => {
   const { user, profile, loading } = useAuth();
   const [gameState, setGameState] = useState<'idle' | 'searching' | 'playing' | 'result'>('idle');
@@ -56,8 +99,19 @@ const GameUI = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [nickname, setNickname] = useState('');
-  const [isEditingNickname, setIsEditingNickname] = useState(false);
+  const [selectedEmoji, setSelectedEmoji] = useState<string | null>(null);
   const [newNickname, setNewNickname] = useState('');
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [tempPhotoURL, setTempPhotoURL] = useState('');
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const categoryRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  const scrollToCategory = (category: string) => {
+    const element = categoryRefs.current[category];
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
 
   useEffect(() => {
     // Force dark mode
@@ -500,14 +554,15 @@ const GameUI = () => {
         }
         const userCredential = await registerWithEmail(email, password);
         const uid = userCredential.user.uid;
+        const photoURL = selectedEmoji || `https://api.dicebear.com/7.x/avataaars/svg?seed=${uid}`;
         
         // Update Auth Profile
         await updateAuthProfile(nickname);
         
-        // Ensure Firestore doc has the correct nickname
-        // We use setDoc with merge to either create it or update the existing one created by AuthContext
+        // Ensure Firestore doc has the correct nickname and photo
         await setDoc(doc(db, 'users', uid), {
-          displayName: nickname
+          displayName: nickname,
+          photoURL: photoURL
         }, { merge: true });
         
         toast.success("Conta criada com sucesso!");
@@ -542,18 +597,23 @@ const GameUI = () => {
     }
   };
 
-  const handleUpdateNickname = async () => {
+  const handleUpdateProfile = async () => {
     if (!user || !newNickname.trim()) return;
     try {
-      await updateDoc(doc(db, 'users', user.uid), {
+      const data: any = {
         displayName: newNickname
-      });
+      };
+      if (tempPhotoURL) {
+        data.photoURL = tempPhotoURL;
+      }
+      
+      await updateDoc(doc(db, 'users', user.uid), data);
       await updateAuthProfile(newNickname);
-      setIsEditingNickname(false);
-      toast.success("Apelido atualizado!");
+      setIsEditingProfile(false);
+      toast.success("Perfil atualizado!");
     } catch (error) {
       console.error(error);
-      toast.error("Erro ao atualizar apelido.");
+      toast.error("Erro ao atualizar perfil.");
     }
   };
 
@@ -595,17 +655,35 @@ const GameUI = () => {
             <CardContent className="space-y-4">
               <form onSubmit={handleEmailAuth} className="space-y-3">
                 {authMode === 'register' && (
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black uppercase text-zinc-500 ml-1">Apelido</label>
-                    <input 
-                      type="text" 
-                      placeholder="Como quer ser chamado?"
-                      value={nickname}
-                      onChange={(e) => setNickname(e.target.value)}
-                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl h-11 px-4 text-sm focus:outline-none focus:border-orange-500 transition-colors"
-                      required
-                    />
-                  </div>
+                  <>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase text-zinc-500 ml-1">Apelido</label>
+                      <input 
+                        type="text" 
+                        placeholder="Como quer ser chamado?"
+                        value={nickname}
+                        onChange={(e) => setNickname(e.target.value)}
+                        className="w-full bg-zinc-950 border border-zinc-800 rounded-xl h-11 px-4 text-sm focus:outline-none focus:border-orange-500 transition-colors"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase text-zinc-500 ml-1">Avatar</label>
+                      <button
+                        type="button"
+                        onClick={() => setShowEmojiPicker(true)}
+                        className="w-full bg-zinc-950 border border-zinc-800 rounded-xl h-14 px-4 flex items-center gap-3 hover:border-orange-500 transition-colors group"
+                      >
+                        <div className="w-10 h-10 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+                          {selectedEmoji || '👤'}
+                        </div>
+                        <div className="text-left">
+                          <p className="text-xs font-bold text-zinc-300">Escolher Emoji</p>
+                          <p className="text-[10px] text-zinc-500 uppercase font-black">Clique para abrir o seletor</p>
+                        </div>
+                      </button>
+                    </div>
+                  </>
                 )}
                 <div className="space-y-1">
                   <label className="text-[10px] font-black uppercase text-zinc-500 ml-1">E-mail</label>
@@ -691,21 +769,30 @@ const GameUI = () => {
           <div className="flex items-center gap-4">
             <div className="hidden sm:flex items-center gap-3 pr-4 border-r border-zinc-800">
               <div className="text-right">
-                {isEditingNickname ? (
-                  <div className="flex items-center gap-2">
+                {isEditingProfile ? (
+                  <div className="flex flex-col items-end gap-2">
                     <input 
                       type="text"
                       value={newNickname}
                       onChange={(e) => setNewNickname(e.target.value)}
-                      className="bg-zinc-950 border border-zinc-800 rounded px-2 py-0.5 text-xs focus:outline-none focus:border-orange-500"
+                      className="bg-zinc-950 border border-zinc-800 rounded px-2 py-0.5 text-xs focus:outline-none focus:border-orange-500 w-32"
                       autoFocus
                     />
-                    <button onClick={handleUpdateNickname} className="text-green-500 hover:text-green-400">
-                      <Check size={14} />
+                    <button
+                      onClick={() => setShowEmojiPicker(true)}
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded px-2 py-1 flex items-center justify-center gap-2 hover:border-orange-500 transition-colors"
+                    >
+                      <span className="text-sm">{tempPhotoURL || '👤'}</span>
+                      <span className="text-[9px] font-black uppercase text-zinc-500">Mudar Emoji</span>
                     </button>
-                    <button onClick={() => setIsEditingNickname(false)} className="text-red-500 hover:text-red-400">
-                      <X size={14} />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button onClick={handleUpdateProfile} className="text-green-500 hover:text-green-400 flex items-center gap-1 text-[10px] font-bold">
+                        <Check size={14} /> SALVAR
+                      </button>
+                      <button onClick={() => setIsEditingProfile(false)} className="text-red-500 hover:text-red-400 flex items-center gap-1 text-[10px] font-bold">
+                        <X size={14} /> CANCELAR
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <div className="flex items-center gap-2 justify-end group">
@@ -713,7 +800,8 @@ const GameUI = () => {
                     <button 
                       onClick={() => {
                         setNewNickname(profile?.displayName || '');
-                        setIsEditingNickname(true);
+                        setTempPhotoURL(profile?.photoURL || '');
+                        setIsEditingProfile(true);
                       }}
                       className="opacity-0 group-hover:opacity-100 transition-opacity text-zinc-500 hover:text-orange-500"
                     >
@@ -727,10 +815,11 @@ const GameUI = () => {
                 </div>
               </div>
               <div className="relative">
-                <Avatar className="h-10 w-10 border-2 border-orange-500/20">
-                  <AvatarImage src={profile?.photoURL} />
-                  <AvatarFallback><UserIcon /></AvatarFallback>
-                </Avatar>
+                <UserAvatar 
+                  src={isEditingProfile ? tempPhotoURL : profile?.photoURL} 
+                  name={profile?.displayName} 
+                  className="h-10 w-10 border-2 border-orange-500/20" 
+                />
                 <span className={`absolute bottom-0 right-0 w-3 h-3 border-2 border-zinc-950 rounded-full ${
                   profile?.status === 'away' ? 'bg-yellow-500' : 'bg-green-500'
                 }`} />
@@ -822,10 +911,7 @@ const GameUI = () => {
                               {index + 1}.
                             </div>
                             <div className="relative shrink-0">
-                              <Avatar className="h-8 w-8 border border-zinc-800">
-                                <AvatarImage src={player.photoURL} />
-                                <AvatarFallback className="bg-zinc-800 text-zinc-100">{player.displayName[0]}</AvatarFallback>
-                              </Avatar>
+                              <UserAvatar src={player.photoURL} name={player.displayName} className="h-8 w-8 border border-zinc-800" />
                               {player.isOnline && (
                                 <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 border-2 border-zinc-950 rounded-full ${
                                   player.status === 'away' ? 'bg-yellow-500' : 'bg-green-500'
@@ -903,10 +989,11 @@ const GameUI = () => {
                 {/* Opponent */}
                 <div className="flex-1 flex flex-col items-center gap-4">
                     <div className="relative">
-                      <Avatar className="h-24 w-24 border-4 border-zinc-800">
-                        <AvatarImage src={currentGame.playerData[currentGame.players.find(id => id !== user.uid)!]?.photoURL} />
-                        <AvatarFallback>?</AvatarFallback>
-                      </Avatar>
+                      <UserAvatar 
+                        src={currentGame.playerData[currentGame.players.find(id => id !== user.uid)!]?.photoURL} 
+                        name={currentGame.playerData[currentGame.players.find(id => id !== user.uid)!]?.displayName}
+                        className="h-24 w-24 border-4 border-zinc-800" 
+                      />
                       {opponentProfile?.isOnline && (
                         <span className={`absolute top-1 right-1 w-5 h-5 border-4 border-zinc-950 rounded-full ${
                           opponentProfile.status === 'away' ? 'bg-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.5)]' : 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]'
@@ -930,10 +1017,7 @@ const GameUI = () => {
                 {/* You */}
                 <div className="flex-1 flex flex-col items-center gap-4">
                   <div className="relative">
-                    <Avatar className="h-24 w-24 border-4 border-orange-500/50">
-                      <AvatarImage src={profile?.photoURL} />
-                      <AvatarFallback>EU</AvatarFallback>
-                    </Avatar>
+                    <UserAvatar src={profile?.photoURL} name={profile?.displayName} className="h-24 w-24 border-4 border-orange-500/50" />
                     <span className={`absolute top-1 right-1 w-5 h-5 border-4 border-zinc-950 rounded-full ${
                       profile?.status === 'away' ? 'bg-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.5)]' : 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]'
                     }`} />
@@ -1116,10 +1200,7 @@ const GameUI = () => {
             >
               <div className="p-8 flex flex-col items-center text-center space-y-6">
                 <div className="relative">
-                  <Avatar className="h-32 w-32 border-4 border-orange-500/20">
-                    <AvatarImage src={selectedProfile.photoURL} />
-                    <AvatarFallback className="text-4xl">{selectedProfile.displayName[0]}</AvatarFallback>
-                  </Avatar>
+                  <UserAvatar src={selectedProfile.photoURL} name={selectedProfile.displayName} className="h-32 w-32 border-4 border-orange-500/20" />
                   <div className="absolute -bottom-2 -right-2 bg-orange-500 p-2 rounded-full shadow-lg">
                     <UserIcon className="text-black h-5 w-5" />
                   </div>
@@ -1213,10 +1294,7 @@ const GameUI = () => {
           >
             <div className="bg-zinc-900 border-2 border-orange-500 rounded-3xl p-4 shadow-2xl flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
-                <Avatar className="h-12 w-12 border border-zinc-800">
-                  <AvatarImage src={incomingInvite.fromPhoto} />
-                  <AvatarFallback>{incomingInvite.fromName[0]}</AvatarFallback>
-                </Avatar>
+                <UserAvatar src={incomingInvite.fromPhoto} name={incomingInvite.fromName} className="h-12 w-12 border border-zinc-800" />
                 <div>
                   <p className="text-sm font-bold text-zinc-100">{incomingInvite.fromName}</p>
                   <p className="text-[10px] font-black text-orange-500 uppercase italic">Te convidou!</p>
@@ -1297,10 +1375,7 @@ const GameUI = () => {
                           <div key={friend.uid} className="flex items-center justify-between group p-2 rounded-2xl hover:bg-zinc-800/50 transition-colors">
                             <div className="flex items-center gap-3 cursor-pointer" onClick={() => { setSelectedProfile(friend); setShowFriends(false); }}>
                               <div className="relative">
-                                <Avatar className="h-10 w-10 border border-zinc-800">
-                                  <AvatarImage src={friend.photoURL} />
-                                  <AvatarFallback>{friend.displayName[0]}</AvatarFallback>
-                                </Avatar>
+                                <UserAvatar src={friend.photoURL} name={friend.displayName} className="h-10 w-10 border border-zinc-800" />
                                 <span className={`absolute bottom-0 right-0 w-3 h-3 border-2 border-zinc-900 rounded-full ${
                                   friend.status === 'online' ? 'bg-green-500' : 
                                   friend.status === 'away' ? 'bg-yellow-500' : 
@@ -1351,10 +1426,7 @@ const GameUI = () => {
                         {friendRequests.map(req => (
                           <div key={req.id} className="flex items-center justify-between p-3 bg-zinc-950 rounded-2xl border border-zinc-800">
                             <div className="flex items-center gap-3">
-                              <Avatar className="h-10 w-10 border border-zinc-800">
-                                <AvatarImage src={req.fromPhoto} />
-                                <AvatarFallback>{req.fromName[0]}</AvatarFallback>
-                              </Avatar>
+                              <UserAvatar src={req.fromPhoto} name={req.fromName} className="h-10 w-10 border border-zinc-800" />
                               <div>
                                 <p className="text-sm font-bold text-zinc-100">{req.fromName}</p>
                                 <p className="text-[10px] font-black text-orange-500 uppercase">Quer ser seu amigo!</p>
@@ -1448,10 +1520,7 @@ const GameUI = () => {
                           <div className="flex items-center gap-4 min-w-0 flex-1">
                             <div className={`w-2 h-12 rounded-full shrink-0 ${isWinner ? 'bg-green-500' : isDraw ? 'bg-zinc-500' : 'bg-red-500'}`} />
                             <div className="flex items-center gap-3 min-w-0">
-                              <Avatar className="h-10 w-10 border border-zinc-800 shrink-0">
-                                <AvatarImage src={opponent?.photoURL} />
-                                <AvatarFallback className="bg-zinc-800 text-zinc-100">{opponent?.displayName[0]}</AvatarFallback>
-                              </Avatar>
+                              <UserAvatar src={opponent?.photoURL} name={opponent?.displayName} className="h-10 w-10 border border-zinc-800 shrink-0" />
                               <div className="min-w-0 flex-1">
                                 <p 
                                   title={opponent?.displayName}
@@ -1488,6 +1557,86 @@ const GameUI = () => {
               <div className="p-4 border-t border-zinc-800 bg-zinc-900/30">
                 <Button onClick={() => setShowHistory(false)} className="w-full bg-zinc-100 text-black hover:bg-white font-black uppercase italic tracking-tighter h-12 rounded-2xl">
                   FECHAR
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Emoji Picker Modal */}
+      <AnimatePresence>
+        {showEmojiPicker && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-zinc-900 border border-zinc-800 w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[70vh]"
+            >
+              <div className="p-6 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/50">
+                <div>
+                  <h2 className="text-2xl font-black italic uppercase tracking-tighter">Escolha seu Emoji</h2>
+                  <p className="text-zinc-500 font-bold uppercase text-[10px] tracking-widest">Personalize seu avatar</p>
+                </div>
+                <Button variant="ghost" size="icon" onClick={() => setShowEmojiPicker(false)} className="rounded-full">
+                  <X className="h-6 w-6" />
+                </Button>
+              </div>
+
+              <div className="px-4 py-2 border-b border-zinc-800 bg-zinc-900/80 backdrop-blur-sm flex items-center justify-around gap-1 overflow-x-auto no-scrollbar shrink-0 select-none">
+                {Object.keys(PROFILE_EMOJIS).map((category) => (
+                  <button
+                    key={category}
+                    onClick={() => scrollToCategory(category)}
+                    className="flex-1 min-w-[48px] h-12 flex items-center justify-center text-2xl hover:bg-zinc-800 rounded-2xl transition-all hover:scale-110 active:scale-95"
+                    title={category}
+                  >
+                    {CATEGORY_SYMBOLS[category]}
+                  </button>
+                ))}
+              </div>
+
+              <ScrollArea className="flex-1 p-6 scrollbar-visible min-h-0 h-full" type="always">
+                <div className="space-y-8">
+                  {Object.entries(PROFILE_EMOJIS).map(([category, emojis]) => (
+                    <div 
+                      key={category} 
+                      className="space-y-4 pt-2"
+                      ref={el => categoryRefs.current[category] = el}
+                    >
+                      <h3 className="text-xs font-black text-zinc-500 uppercase tracking-widest ml-1">{category}</h3>
+                      <div className="grid grid-cols-6 sm:grid-cols-8 gap-3 pr-2">
+                        {emojis.map((emoji) => (
+                          <button
+                            key={emoji}
+                            onClick={() => {
+                              if (isEditingProfile) {
+                                setTempPhotoURL(emoji);
+                              } else {
+                                setSelectedEmoji(emoji);
+                              }
+                              setShowEmojiPicker(false);
+                            }}
+                            className="aspect-square flex items-center justify-center text-3xl hover:bg-zinc-800 rounded-2xl transition-all hover:scale-110 active:scale-95"
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+              
+              <div className="p-4 border-t border-zinc-800 bg-zinc-900/30">
+                <Button onClick={() => setShowEmojiPicker(false)} className="w-full bg-zinc-100 text-black hover:bg-white font-black uppercase italic tracking-tighter h-12 rounded-2xl">
+                  CANCELAR
                 </Button>
               </div>
             </motion.div>

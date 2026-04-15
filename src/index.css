@@ -131,3 +131,53 @@
     cursor: pointer;
   }
 }
+
+@layer utilities {
+  .scrollbar-visible {
+    scrollbar-gutter: stable;
+  }
+
+  .scrollbar-visible [data-slot="scroll-area-viewport"] {
+    scrollbar-width: thin;
+    scrollbar-color: oklch(0.7 0 0) transparent;
+  }
+
+  .scrollbar-visible [data-slot="scroll-area-viewport"]::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .scrollbar-visible [data-slot="scroll-area-viewport"]::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+  }
+
+  .scrollbar-visible [data-slot="scroll-area-viewport"]::-webkit-scrollbar-thumb {
+    background-color: oklch(0.7 0 0);
+    border-radius: 20px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+
+  .scrollbar-visible [data-slot="scroll-area-scrollbar"] {
+    opacity: 1 !important;
+    visibility: visible !important;
+    width: 12px !important;
+    background: rgba(255, 255, 255, 0.03) !important;
+    border-left: 1px solid rgba(255, 255, 255, 0.05) !important;
+  }
+
+  .scrollbar-visible [data-slot="scroll-area-thumb"] {
+    background-color: oklch(0.7 0 0) !important;
+    width: 8px !important;
+    margin-left: 2px !important;
+    border-radius: 10px !important;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
