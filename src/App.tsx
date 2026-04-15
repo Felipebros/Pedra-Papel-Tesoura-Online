@@ -28,7 +28,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
@@ -898,7 +897,7 @@ const GameUI = () => {
                   <Trophy className="h-5 w-5 text-orange-500" />
                 </CardHeader>
                 <CardContent>
-                  <ScrollArea className="h-[400px] pr-4">
+                  <div className="h-[400px] pr-4 overflow-y-auto scrollbar-custom">
                     <div className="space-y-4 mt-4">
                       {leaderboard.map((player, index) => (
                         <div 
@@ -932,7 +931,7 @@ const GameUI = () => {
                         </div>
                       ))}
                     </div>
-                  </ScrollArea>
+                  </div>
                 </CardContent>
               </Card>
             </motion.div>
@@ -1363,7 +1362,7 @@ const GameUI = () => {
                 </TabsList>
 
                 <TabsContent value="friends" className="flex-1 overflow-hidden p-6 mt-0">
-                  <ScrollArea className="h-full">
+                  <div className="h-full overflow-y-auto scrollbar-custom">
                     {friendsList.length === 0 ? (
                       <div className="flex flex-col items-center justify-center py-12 text-center space-y-4">
                         <Users className="h-12 w-12 text-zinc-800" />
@@ -1411,11 +1410,11 @@ const GameUI = () => {
                         ))}
                       </div>
                     )}
-                  </ScrollArea>
+                  </div>
                 </TabsContent>
 
                 <TabsContent value="requests" className="flex-1 overflow-hidden p-6 mt-0">
-                  <ScrollArea className="h-full">
+                  <div className="h-full overflow-y-auto scrollbar-custom">
                     {friendRequests.length === 0 ? (
                       <div className="flex flex-col items-center justify-center py-12 text-center space-y-4">
                         <Clock className="h-12 w-12 text-zinc-800" />
@@ -1455,7 +1454,7 @@ const GameUI = () => {
                         ))}
                       </div>
                     )}
-                  </ScrollArea>
+                  </div>
                 </TabsContent>
               </Tabs>
             </motion.div>
@@ -1493,7 +1492,7 @@ const GameUI = () => {
                 </Button>
               </div>
 
-              <ScrollArea className="flex-1 p-6">
+              <div className="flex-1 p-6 overflow-y-auto scrollbar-custom min-h-0">
                 <div className="space-y-4">
                   {matchHistory.length === 0 ? (
                     <div className="text-center py-12 space-y-4">
@@ -1552,7 +1551,7 @@ const GameUI = () => {
                     })
                   )}
                 </div>
-              </ScrollArea>
+              </div>
               
               <div className="p-4 border-t border-zinc-800 bg-zinc-900/30">
                 <Button onClick={() => setShowHistory(false)} className="w-full bg-zinc-100 text-black hover:bg-white font-black uppercase italic tracking-tighter h-12 rounded-2xl">
@@ -1602,7 +1601,7 @@ const GameUI = () => {
                 ))}
               </div>
 
-              <ScrollArea className="flex-1 p-6 scrollbar-visible min-h-0 h-full" type="always">
+              <div className="flex-1 p-6 overflow-y-auto scrollbar-custom min-h-0">
                 <div className="space-y-8">
                   {Object.entries(PROFILE_EMOJIS).map(([category, emojis]) => (
                     <div 
@@ -1632,7 +1631,7 @@ const GameUI = () => {
                     </div>
                   ))}
                 </div>
-              </ScrollArea>
+              </div>
               
               <div className="p-4 border-t border-zinc-800 bg-zinc-900/30">
                 <Button onClick={() => setShowEmojiPicker(false)} className="w-full bg-zinc-100 text-black hover:bg-white font-black uppercase italic tracking-tighter h-12 rounded-2xl">
